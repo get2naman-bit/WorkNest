@@ -185,7 +185,7 @@ export default function AuthPage() {
 
     setVerifying(true);
     try {
-      const res = await verifyOtp(otpEmail, digits);
+      const res = await verifyOtp(otpEmail, digits, password);
       if (res.success) {
         navigate('/dashboard');
       } else {

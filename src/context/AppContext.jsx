@@ -372,99 +372,23 @@ export function AppProvider({ children }) {
 
     if (isSupabaseConfigured) {
       try {
-        let res = null;
-        try {
-          res = await db.signUp({ ...userData, email: normalizedEmail });
-        } catch (signUpErr) {
-          const msg = (signUpErr?.message || '').toLowerCase();
-          // The address already has an (unverified) account — resend the code
-          // instead of failing, so an abandoned OTP step can be resumed.
-          if (msg.includes('already registered') || msg.includes('already been registered')) {
-            await db.sendSignupOtp(normalizedEmail);
-            return {
-              success: true,
-              requiresOtp: true,
-              email: normalizedEmail,
-              user: null,
-              resent: true,
-            };
-          }
-          throw signUpErr;
-        }
+        // One email per signup: this call creates the account AND sends the
+        // 6-digit code that proves the address. No confirmation email, no link.
+        await db.sendSignupOtp(normalizedEmail, {
+          role: userData.role,
+          name: userData.name,
+          location: userData.location || 'Austin, TX',
+          companyName: userData.role === 'employer' ? userData.companyName || '' : '',
+          title: userData.role === 'worker' ? userData.title || '' : '',
+          skills: userData.role === 'worker' && userData.title ? [userData.title] : [],
+        });
 
-        if (!res?.user) {
-          // Supabase answers `user: null` when the address is already taken.
-          // One more OTP lets a previously abandoned verification step resume;
-          // otherwise tell the user plainly.
-          try {
-            await db.sendSignupOtp(normalizedEmail);
-            return {
-              success: true,
-              requiresOtp: true,
-              email: normalizedEmail,
-              user: null,
-              resent: true,
-            };
-          } catch (otpErr) {
-            return {
-              success: false,
-              error: 'An account with this email already exists. Sign in instead.',
-            };
-          }
-        }
-
-        // First-time account creation: send a 6-digit OTP to the address so
-        // the email is proven before the account can be used.
-        try {
-          await db.sendSignupOtp(normalizedEmail);
-          return {
-            success: true,
-            requiresOtp: true,
-            email: normalizedEmail,
-            user: null,
-          };
-        } catch (otpErr) {
-          // OTP delivery failed — fall back to the confirmation-link flow so
-          // the user still has a way to verify.
-          console.warn('OTP send failed, falling back to email link:', otpErr);
-          if (!res.session) {
-            return {
-              success: true,
-              requiresConfirmation: true,
-              user: null,
-            };
-          }
-          // Email confirmation is disabled on this project, so signUp already
-          // returned a usable session — finish signing in.
-        }
-
-        let profile = null;
-        try {
-          profile = await db.fetchProfile(res.user.id);
-        } catch {
-          profile = null;
-        }
-
-        if (!profile) {
-          profile = buildUserRecord({
-            id: res.user.id,
-            role: userData.role,
-            name: userData.name,
-            email: normalizedEmail,
-            location: userData.location || 'Austin, TX',
-            companyName: userData.role === 'employer' ? userData.companyName || '' : '',
-            title: userData.role === 'worker' ? userData.title || '' : '',
-            skills: userData.role === 'worker' && userData.title ? [userData.title] : [],
-            verified: true,
-          });
-        }
-
-        setState((prev) => ({
-          ...prev,
-          users: mergeById([profile], prev.users),
-          currentUser: profile,
-        }));
-        return { success: true, user: profile };
+        return {
+          success: true,
+          requiresOtp: true,
+          email: normalizedEmail,
+          user: null,
+        };
       } catch (err) {
         return { success: false, error: err.message || 'Registration failed.' };
       }
@@ -507,7 +431,7 @@ export function AppProvider({ children }) {
 
   // Verify the 6-digit code sent on first-time account creation. On success
   // the user is fully signed in and lands on their dashboard.
-  const verifyOtp = async (email, code) => {
+  const verifyOtp = async (email, code, password) => {
     const normalizedEmail = (email || '').trim().toLowerCase();
 
     if (!normalizedEmail) {
@@ -528,6 +452,17 @@ export function AppProvider({ children }) {
       const user = session?.user;
       if (!user) {
         return { success: false, error: 'Verification failed. Please try again.' };
+      }
+
+      // The account was created by the OTP call itself, so it has no password
+      // yet — set the one from the form now that we hold a session.
+      if (password) {
+        try {
+          await db.setPasswordAfterSignup(password);
+        } catch (pwErr) {
+          // Non-fatal: the address is verified and the user is signed in.
+          console.warn('Could not set the account password after OTP:', pwErr);
+        }
       }
 
       let profile = null;

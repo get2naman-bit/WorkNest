@@ -70,18 +70,31 @@ export async function signUp({ email, password, role, name, ...metadata }) {
 }
 
 // First-time account creation is verified with a 6-digit email OTP.
-// Called right after signUp() has created the unconfirmed account.
-export async function sendSignupOtp(email) {
+// The OTP call also CREATES the account, so signup costs exactly one email —
+// the one that carries the code. The password is set after verification.
+export async function sendSignupOtp(email, metadata = {}) {
   if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
   if (!email) throw new Error('An email address is required.');
 
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      // The account was just created by signUp() — never create a second one.
-      shouldCreateUser: false,
+      // Safe for an address that already has an account: GoTrue just sends
+      // another code and ignores the metadata for existing users.
+      shouldCreateUser: true,
+      data: metadata,
     },
   });
+  if (error) throw error;
+}
+
+// The account is created by sendSignupOtp without a password, so the chosen
+// password is applied once the OTP has produced a session.
+export async function setPasswordAfterSignup(password) {
+  if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
+  if (!password) return;
+
+  const { error } = await supabase.auth.updateUser({ password });
   if (error) throw error;
 }
 
