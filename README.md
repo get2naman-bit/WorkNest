@@ -21,12 +21,14 @@ Create Account  ->  account created + OTP emailed  ->  enter 6-digit code  ->  d
 ```
 
 - Supabase → Authentication → Providers → Email: turn **Confirm email** ON.
-- Supabase → Authentication → Email Templates → **Confirm signup**: include
-  `{{ .Code }}` so the message carries the 6-digit code.
+- Supabase → Authentication → Email Templates → **Confirm signup** and
+  **Magic link or OTP**: show `{{ .Token }}` as visible text — that is
+  Supabase's 6-digit code (there is no `{{ .Code }}` variable). Do not wrap
+  it in `<a href>`; it is a code, not a URL.
 - The OTP step also has **Resend code** (Supabase rate-limits to roughly one
   message per minute) and **Use a different email**.
-- If the OTP cannot be delivered, WorkNest falls back to Supabase's normal
-  confirmation link so verification is still possible.
+- Signup creates the account in the same call that sends the code, so exactly
+  one email goes out per registration.
 
 Setup: run `supabase/schema.sql` in the Supabase SQL editor, copy
 `.env.example` to `.env` with your project URL and anon key, then restart
