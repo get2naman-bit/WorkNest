@@ -1,0 +1,7 @@
+.nav { position: sticky; top: 0; z-index: 50; padding: 12px 24px 0; }
+.nav__bar { max-width: var(--container); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; border-radius: 14px; background: rgba(255,255,255,.55); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.6); }
+.nav__left, .nav__right { display: flex; align-items: center; gap: 28px; }
+.nav__links { display: flex; gap: 26px; font-size: 14px; font-weight: 500; color: #3b4658; }
+.nav__links a:hover { color: var(--blue); }
+.nav__login { font-size: 14px; font-weight: 600; }
+@media (max-width: 760px) { .nav__links { display: none; } .nav__left, .nav__right { gap: 16px; } }

@@ -1,0 +1,12 @@
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 10px; font-weight: 600; transition: background .15s, transform .15s; }
+.btn--md { padding: 12px 22px; font-size: 15px; }
+.btn--lg { padding: 16px 28px; min-width: 190px; font-size: 16px; border-radius: 12px; }
+.btn--sm { padding: 9px 16px; font-size: 14px; }
+.btn--dark { background: var(--ink); color: #fff; }
+.btn--dark:hover { background: #000; }
+.btn--light { background: #fff; color: var(--ink); border-color: var(--line); }
+.btn--light:hover { background: #f4f6f9; }
+.btn--outline { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
+.btn--outline:hover { background: rgba(255,255,255,.08); }
+.btn--blue { background: var(--blue); color: #fff; }
+.btn--blue:hover { background: var(--blue-dark); }

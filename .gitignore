@@ -1,0 +1,14 @@
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Node dependencies
+node_modules/
+dist/
+dist-ssr/
+
+# Editor / OS files
+.DS_Store
+Thumbs.db
+*.local

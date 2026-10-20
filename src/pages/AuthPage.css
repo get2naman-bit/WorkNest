@@ -1,0 +1,396 @@
+/* Frosted glass authentication page styles */
+
+.auth-wrapper {
+  min-height: 100vh;
+  background-color: #f0f6fd;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(211, 232, 251, 0.7) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(233, 242, 252, 0.8) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(219, 234, 254, 0.6) 0px, transparent 50%);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ambient soft clouds */
+.auth-blob {
+  position: absolute;
+  filter: blur(80px);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.65;
+}
+
+.auth-blob--1 {
+  width: 480px;
+  height: 480px;
+  background: #bfdbfe;
+  top: -100px;
+  right: -50px;
+}
+
+.auth-blob--2 {
+  width: 520px;
+  height: 520px;
+  background: #e0f2fe;
+  bottom: -120px;
+  left: -80px;
+}
+
+.auth-blob--3 {
+  width: 320px;
+  height: 320px;
+  background: #dbeafe;
+  top: 40%;
+  left: 20%;
+}
+
+.auth-header-bar {
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 10;
+}
+
+.auth-back-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.auth-back-link:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.auth-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 20px 60px;
+  position: relative;
+  z-index: 10;
+}
+
+/* Frosted glass card */
+.auth-card-frosted {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 36px 32px;
+  box-shadow: 
+    0 20px 40px -15px rgba(10, 17, 32, 0.08),
+    0 0 0 1px rgba(228, 231, 236, 0.5);
+}
+
+.auth-card-top {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(26, 111, 224, 0.1);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.auth-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+}
+
+.auth-sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.auth-mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: rgba(241, 245, 249, 0.85);
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 24px;
+}
+
+.auth-tab {
+  background: transparent;
+  border: none;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.auth-tab.is-active {
+  background: #ffffff;
+  color: var(--navy);
+  box-shadow: 0 2px 6px rgba(10, 17, 32, 0.06);
+}
+
+.auth-role-select {
+  margin-bottom: 20px;
+}
+
+.auth-role-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.auth-role-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth-role-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.6);
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.auth-role-btn:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.auth-role-btn.is-active {
+  background: #ffffff;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(26, 111, 224, 0.2);
+}
+
+.auth-role-btn strong {
+  display: block;
+  font-size: 13px;
+  color: var(--navy);
+}
+
+.auth-role-btn small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.auth-input-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.auth-input-with-icon {
+  padding-left: 38px;
+}
+
+.auth-error-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.auth-notice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+.auth-notice-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.auth-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-forgot-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+}
+
+.auth-forgot-link:hover {
+  text-decoration: underline;
+}
+
+.auth-forgot-link:disabled {
+  color: var(--muted);
+  cursor: default;
+  text-decoration: none;
+}
+
+.auth-local-note {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------------
+   Email OTP verification (first-time account creation)
+   Note: .auth-otp-form is required for specificity — AuthPage.css
+   loads before app.css, so a bare class would lose to .form-input.
+   ------------------------------------------------------------- */
+.auth-otp-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.auth-otp-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sky);
+  color: var(--blue);
+  display: grid;
+  place-items: center;
+}
+
+.auth-otp-head p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.auth-otp-head p strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.auth-otp-form .auth-otp-input {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  text-align: center;
+  text-indent: 0.4em;
+  padding: 14px 16px;
+  height: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.auth-otp-form .auth-otp-input::placeholder {
+  color: #b9c2d0;
+  letter-spacing: 0.4em;
+}
+
+.auth-otp-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.auth-otp-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+}
+
+.auth-otp-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.auth-otp-link:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.auth-otp-hint {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .auth-role-options {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-header-bar {
+    padding: 18px 20px;
+  }
+
+  .auth-card-frosted {
+    padding: 28px 20px;
+  }
+}

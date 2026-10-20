@@ -1,0 +1,16 @@
+.identity { padding: 48px 0 88px; }
+.identity__card { display: grid; grid-template-columns: 1fr 1.1fr; gap: 40px; align-items: center; padding: 44px 32px 44px 28px; border-radius: 28px; background: var(--sky-strong); }
+.identity .h2 { font-size: clamp(32px, 4.5vw, 42px); }
+.identity .lead { margin-top: 18px; font-size: 15px; max-width: 450px; color: #3d4c60; line-height: 1.6; }
+.identity__chips { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+.identity__chips li { background: #fff; border-radius: 14px; padding: 14px 20px; min-width: 140px; display: grid; gap: 4px; }
+.identity__chips strong { font-size: 15px; }
+.identity__chips span { font-size: 12px; color: var(--muted); }
+/* The preview is a desktop-width mockup scaled down to fit the card.
+   The shot is a container so the scale factor can be derived from its own
+   width (100cqw), and the mockup keeps its natural desktop layout (no
+   cramped wrapping) at every viewport size. 960 / 706 is the mockup's
+   natural aspect ratio at its 960px design width. */
+.identity__shot { position: relative; container-type: inline-size; aspect-ratio: 960 / 706; overflow: hidden; border-radius: 8px; box-shadow: 0 10px 30px rgba(16,24,40,.12); background: #fff; }
+.identity__shot .dash--compact { position: absolute; top: 0; left: 0; }
+@media (max-width: 900px) { .identity__card { grid-template-columns: 1fr; } .identity__shot { display: none; } }
