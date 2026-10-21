@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   User,
@@ -34,49 +34,8 @@ export default function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
-  // First-time account creation: 6-digit email OTP step
-  const [otpStep, setOtpStep] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [otpEmail, setOtpEmail] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  const { login, register, verifyOtp, resendOtp, requestPasswordReset, isSupabaseConfigured } = useApp();
+  const { login, register, requestPasswordReset, isSupabaseConfigured } = useApp();
   const navigate = useNavigate();
-
-  const resendTimerRef = useRef(null);
-
-  const startResendCooldown = () => {
-    if (resendTimerRef.current) clearInterval(resendTimerRef.current);
-    setResendCooldown(60);
-    resendTimerRef.current = setInterval(() => {
-      setResendCooldown((s) => {
-        if (s <= 1) {
-          clearInterval(resendTimerRef.current);
-          resendTimerRef.current = null;
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-  };
-
-  // Never leave a countdown running after the page unmounts.
-  useEffect(() => {
-    return () => {
-      if (resendTimerRef.current) clearInterval(resendTimerRef.current);
-    };
-  }, []);
-
-  const enterOtpStep = (emailAddress) => {
-    setOtpStep(true);
-    setOtp('');
-    setOtpEmail(emailAddress);
-    setError('');
-    setNotice(`We sent a 6-digit verification code to ${emailAddress}.`);
-    startResendCooldown();
-  };
 
   const clearMessages = () => {
     setError('');
@@ -134,11 +93,6 @@ export default function AuthPage() {
         skills: role === 'worker' ? [trade.trim()] : [],
       });
 
-      if (res.success && res.requiresOtp) {
-        enterOtpStep(res.email || email.trim());
-        return;
-      }
-
       if (res.success && res.requiresConfirmation) {
         setMode('login');
         setPassword('');
@@ -172,55 +126,6 @@ export default function AuthPage() {
     }
   };
 
-  // Verify the 6-digit code from the first-time signup email.
-  const handleOtpSubmit = async (e) => {
-    e.preventDefault();
-    clearMessages();
-
-    const digits = otp.replace(/\D/g, '');
-    if (digits.length !== 6) {
-      setError('Enter the 6-digit code from your email.');
-      return;
-    }
-
-    setVerifying(true);
-    try {
-      const res = await verifyOtp(otpEmail, digits, password);
-      if (res.success) {
-        navigate('/dashboard');
-      } else {
-        setError(res.error || 'That code is not correct. Please try again.');
-        setOtp('');
-      }
-    } catch (err) {
-      setError(err.message || 'Verification failed. Please try again.');
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const handleResend = async () => {
-    clearMessages();
-    setResending(true);
-    try {
-      const res = await resendOtp(otpEmail);
-      if (res.success) {
-        setNotice(res.message);
-        startResendCooldown();
-      } else {
-        setError(res.error);
-      }
-    } finally {
-      setResending(false);
-    }
-  };
-
-  const handleBackFromOtp = () => {
-    setOtpStep(false);
-    setOtp('');
-    clearMessages();
-  };
-
   return (
     <div className="auth-wrapper">
       {/* Cloud-like soft background ambient blobs */}
@@ -243,24 +148,17 @@ export default function AuthPage() {
               Verified WorkNest Account
             </span>
             <h1 className="auth-title">
-              {otpStep
-                ? 'Verify your email'
-                : mode === 'login'
-                ? 'Welcome back'
-                : 'Create your account'}
+              {mode === 'login' ? 'Welcome back' : 'Create your account'}
             </h1>
             <p className="auth-sub">
-              {otpStep
-                ? 'Enter the 6-digit code we emailed you to finish creating your account.'
-                : mode === 'login'
+              {mode === 'login'
                 ? 'Sign in to access your dashboard, jobs, and digital work identity.'
                 : 'Join WorkNest to build portable work credentials or hire verified pros.'}
             </p>
           </div>
 
           {/* Mode Switcher Tabs */}
-          {!otpStep && (
-            <div className="auth-mode-tabs" role="tablist">
+          <div className="auth-mode-tabs" role="tablist">
               <button
                 type="button"
                 className={`auth-tab ${mode === 'login' ? 'is-active' : ''}`}
@@ -281,11 +179,10 @@ export default function AuthPage() {
             >
               Create Account
             </button>
-            </div>
-          )}
+          </div>
 
           {/* Role selector if registering */}
-          {mode === 'register' && !otpStep && (
+          {mode === 'register' && (
             <div className="auth-role-select">
               <label className="auth-role-label">I want to:</label>
               <div className="auth-role-options">
@@ -323,73 +220,7 @@ export default function AuthPage() {
             </div>
           )}
 
-          {/* First-time signup: email OTP verification */}
-          {otpStep && (
-            <form onSubmit={handleOtpSubmit} className="auth-form auth-otp-form">
-              <div className="auth-otp-head">
-                <span className="auth-otp-icon">
-                  <Mail size={20} />
-                </span>
-                <p>
-                  Enter the code sent to <strong>{otpEmail}</strong>
-                </p>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="auth-otp">
-                  6-digit verification code <span className="required">*</span>
-                </label>
-                <input
-                  id="auth-otp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  className="form-input auth-otp-input"
-                  placeholder="000000"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  autoFocus
-                />
-              </div>
-
-              <Button
-                type="submit"
-                variant="dark"
-                size="lg"
-                disabled={verifying || otp.replace(/\D/g, '').length !== 6}
-                style={{ width: '100%', marginTop: '8px' }}
-              >
-                {verifying ? 'Verifying...' : 'Verify & Continue'}
-                {!verifying && <ArrowRight size={16} />}
-              </Button>
-
-              <div className="auth-otp-actions">
-                <button
-                  type="button"
-                  className="auth-otp-link"
-                  onClick={handleResend}
-                  disabled={resending || resendCooldown > 0}
-                >
-                  {resendCooldown > 0
-                    ? `Resend code in ${resendCooldown}s`
-                    : resending
-                    ? 'Sending...'
-                    : 'Resend code'}
-                </button>
-                <button type="button" className="auth-otp-link" onClick={handleBackFromOtp}>
-                  Use a different email
-                </button>
-              </div>
-
-              <p className="auth-otp-hint">
-                The code expires after 10 minutes. Check your spam folder if it has not arrived.
-              </p>
-            </form>
-          )}
-
           {/* Auth Form */}
-          {!otpStep && (
           <form onSubmit={handleSubmit} className="auth-form">
             {mode === 'register' && (
               <>
@@ -514,7 +345,6 @@ export default function AuthPage() {
               {!submitting && <ArrowRight size={16} />}
             </Button>
           </form>
-          )}
 
           {!isSupabaseConfigured && (
             <p className="auth-local-note">

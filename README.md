@@ -7,28 +7,24 @@ npm run dev      # http://localhost:5173
 npm run build    # production build in dist/
 ```
 
-## Accounts & first-time email verification
+## Accounts & email confirmation
 
 WorkNest ships in **local mode**: accounts live in this browser (salted SHA-256,
 key `worknest_credentials_v1`) until Supabase is configured. Local mode cannot
 send email, so it signs you in immediately after registration.
 
-With Supabase configured, **new accounts must be verified with a 6-digit OTP**
-sent to the sign-up address:
+With Supabase configured, registration uses Supabase's standard signup:
 
 ```
-Create Account  ->  account created + OTP emailed  ->  enter 6-digit code  ->  dashboard
+Create Account  ->  confirmation email  ->  click the link  ->  Sign In  ->  dashboard
 ```
 
-- Supabase → Authentication → Providers → Email: turn **Confirm email** ON.
-- Supabase → Authentication → Email Templates → **Confirm signup** and
-  **Magic link or OTP**: show `{{ .Token }}` as visible text — that is
-  Supabase's 6-digit code (there is no `{{ .Code }}` variable). Do not wrap
-  it in `<a href>`; it is a code, not a URL.
-- The OTP step also has **Resend code** (Supabase rate-limits to roughly one
-  message per minute) and **Use a different email**.
-- Signup creates the account in the same call that sends the code, so exactly
-  one email goes out per registration.
+- If your Supabase project has **Confirm email** OFF, signup returns a session
+  and you land on the dashboard immediately.
+- If it is ON, WorkNest tells you to check your inbox; the confirmation link
+  signs the account in, and you then log in with the password you chose.
+- No email templates need to be edited — the default Supabase confirmation
+  template works as-is.
 
 Setup: run `supabase/schema.sql` in the Supabase SQL editor, copy
 `.env.example` to `.env` with your project URL and anon key, then restart

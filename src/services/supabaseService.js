@@ -69,55 +69,6 @@ export async function signUp({ email, password, role, name, ...metadata }) {
   return data;
 }
 
-// First-time account creation is verified with a 6-digit email OTP.
-// The OTP call also CREATES the account, so signup costs exactly one email —
-// the one that carries the code. The password is set after verification.
-export async function sendSignupOtp(email, metadata = {}) {
-  if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
-  if (!email) throw new Error('An email address is required.');
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      // Safe for an address that already has an account: GoTrue just sends
-      // another code and ignores the metadata for existing users.
-      shouldCreateUser: true,
-      data: metadata,
-    },
-  });
-  if (error) throw error;
-}
-
-// The account is created by sendSignupOtp without a password, so the chosen
-// password is applied once the OTP has produced a session.
-export async function setPasswordAfterSignup(password) {
-  if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
-  if (!password) return;
-
-  const { error } = await supabase.auth.updateUser({ password });
-  if (error) throw error;
-}
-
-// Verify the 6-digit signup OTP. Returns the session on success.
-export async function verifySignupOtp({ email, token }) {
-  if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
-
-  const code = String(token || '').replace(/\D/g, '');
-  if (code.length !== 6) throw new Error('Enter the 6-digit code from your email.');
-
-  // Depending on the project's templates the same code verifies as `email`
-  // (generic OTP) or as `signup` (account confirmation). Try both and report
-  // the first failure, which is the meaningful one ("expired / invalid").
-  let firstError = null;
-  for (const type of ['email', 'signup']) {
-    const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type });
-    if (!error) return data?.session || null;
-    if (!firstError) firstError = error;
-  }
-
-  throw firstError;
-}
-
 export async function signIn({ email, password }) {
   if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });

@@ -372,9 +372,11 @@ export function AppProvider({ children }) {
 
     if (isSupabaseConfigured) {
       try {
-        // One email per signup: this call creates the account AND sends the
-        // 6-digit code that proves the address. No confirmation email, no link.
-        await db.sendSignupOtp(normalizedEmail, {
+        // Standard Supabase signup. If the project has "Confirm email" on,
+        // Supabase sends its confirmation link and no session comes back yet.
+        const data = await db.signUp({
+          email: normalizedEmail,
+          password: userData.password,
           role: userData.role,
           name: userData.name,
           location: userData.location || 'Austin, TX',
@@ -383,12 +385,53 @@ export function AppProvider({ children }) {
           skills: userData.role === 'worker' && userData.title ? [userData.title] : [],
         });
 
-        return {
-          success: true,
-          requiresOtp: true,
-          email: normalizedEmail,
-          user: null,
-        };
+        const user = data?.user;
+        if (!user) {
+          return { success: false, error: 'Registration failed. Please try again.' };
+        }
+
+        // With confirmations enabled Supabase obfuscates an address that
+        // already has an account: a user object comes back with no identities.
+        if (Array.isArray(user.identities) && user.identities.length === 0) {
+          return {
+            success: false,
+            error: 'An account with this email already exists. Try signing in instead.',
+          };
+        }
+
+        // No session yet means the account is waiting on the confirmation link.
+        if (!data.session) {
+          return { success: true, requiresConfirmation: true, email: normalizedEmail };
+        }
+
+        let profile = null;
+        try {
+          profile = await db.fetchProfile(user.id);
+        } catch {
+          profile = null;
+        }
+
+        if (!profile) {
+          profile = buildUserRecord({
+            id: user.id,
+            role: user.user_metadata?.role || userData.role,
+            name: user.user_metadata?.name || userData.name,
+            email: user.email || normalizedEmail,
+            location: user.user_metadata?.location || 'Austin, TX',
+            companyName: user.user_metadata?.companyName || '',
+            title: user.user_metadata?.title || '',
+            skills: Array.isArray(user.user_metadata?.skills) ? user.user_metadata.skills : [],
+            verified: Boolean(user.email_confirmed_at),
+          });
+        }
+
+        setState((prev) => ({
+          ...prev,
+          currentUser: profile,
+          users: mergeById([profile], prev.users),
+        }));
+        await refreshUserContent(profile.id);
+        return { success: true, user: profile };
       } catch (err) {
         return { success: false, error: err.message || 'Registration failed.' };
       }
@@ -427,126 +470,6 @@ export function AppProvider({ children }) {
       currentUser: newUser,
     }));
     return { success: true, user: newUser };
-  };
-
-  // Verify the 6-digit code sent on first-time account creation. On success
-  // the user is fully signed in and lands on their dashboard.
-  const verifyOtp = async (email, code, password) => {
-    const normalizedEmail = (email || '').trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      return { success: false, error: 'Enter your email address first.' };
-    }
-    if (!isSupabaseConfigured) {
-      return {
-        success: false,
-        error: 'Email verification is only available when Supabase is configured.',
-      };
-    }
-    if (!code || String(code).replace(/\D/g, '').length !== 6) {
-      return { success: false, error: 'Enter the 6-digit code from your email.' };
-    }
-
-    try {
-      const session = await db.verifySignupOtp({ email: normalizedEmail, token: code });
-      const user = session?.user;
-      if (!user) {
-        return { success: false, error: 'Verification failed. Please try again.' };
-      }
-
-      // The account was created by the OTP call itself, so it has no password
-      // yet — set the one from the form now that we hold a session.
-      if (password) {
-        try {
-          await db.setPasswordAfterSignup(password);
-        } catch (pwErr) {
-          // Non-fatal: the address is verified and the user is signed in.
-          console.warn('Could not set the account password after OTP:', pwErr);
-        }
-      }
-
-      let profile = null;
-      try {
-        profile = await db.fetchProfile(user.id);
-      } catch {
-        profile = null;
-      }
-
-      if (!profile) {
-        profile = buildUserRecord({
-          id: user.id,
-          role: user.user_metadata?.role || 'worker',
-          name: user.user_metadata?.name || normalizedEmail.split('@')[0],
-          email: user.email || normalizedEmail,
-          location: user.user_metadata?.location || 'Austin, TX',
-          companyName: user.user_metadata?.companyName || '',
-          title: user.user_metadata?.title || '',
-          skills: Array.isArray(user.user_metadata?.skills) ? user.user_metadata.skills : [],
-          verified: true,
-        });
-      } else {
-        // The signup-time profile upsert runs before there is a session, so it
-        // can be blocked by RLS. Now that the account is authenticated, carry
-        // over anything the form submitted that the profile row is missing.
-        const meta = user.user_metadata || {};
-        const metaSkills = Array.isArray(meta.skills) ? meta.skills.filter(Boolean) : [];
-        const patch = {};
-        if ((!profile.skills || !profile.skills.length) && metaSkills.length) {
-          patch.skills = metaSkills;
-        }
-        if (!profile.title && meta.title) patch.title = meta.title;
-        if (!profile.companyName && meta.companyName) patch.companyName = meta.companyName;
-        if (profile.verified !== true) patch.verified = true;
-
-        if (Object.keys(patch).length) {
-          try {
-            const updated = await db.updateProfile(user.id, patch);
-            if (updated) profile = { ...profile, ...updated };
-          } catch (e) {
-            console.warn('Profile enrichment after OTP failed:', e);
-          }
-        }
-      }
-
-      setState((prev) => ({
-        ...prev,
-        currentUser: profile,
-        users: mergeById([profile], prev.users),
-      }));
-      await refreshUserContent(profile.id);
-      return { success: true, user: profile };
-    } catch (err) {
-      return { success: false, error: err.message || 'Verification failed. Please try again.' };
-    }
-  };
-
-  // Send another signup OTP (rate-limited by Supabase to roughly one per minute).
-  const resendOtp = async (email) => {
-    const normalizedEmail = (email || '').trim().toLowerCase();
-    if (!normalizedEmail) {
-      return { success: false, error: 'Enter your email address first.' };
-    }
-    if (!isSupabaseConfigured) {
-      return {
-        success: false,
-        error: 'Email verification is only available when Supabase is configured.',
-      };
-    }
-
-    try {
-      await db.sendSignupOtp(normalizedEmail);
-      return {
-        success: true,
-        message: `A new 6-digit code was sent to ${normalizedEmail}.`,
-      };
-    } catch (err) {
-      return {
-        success: false,
-        error:
-          err.message ||
-          'Could not send a new code right now. Please wait a minute and try again.',
-      };
-    }
   };
 
   const logout = async () => {
@@ -1214,8 +1137,6 @@ export function AppProvider({ children }) {
         loading,
         login,
         register,
-        verifyOtp,
-        resendOtp,
         logout,
         requestPasswordReset,
         changePassword,
