@@ -1,0 +1,70 @@
+.mjm { display: flex; flex-direction: column; gap: 12px; }
+.mjm__canvas { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #dbeafe; }
+.mjm__canvas svg { width: 100%; height: auto; max-height: 640px; margin: 0 auto; }
+
+.mjm__sea { fill: #cfe3f7; }
+.mjm__land { fill: #f4efe3; stroke: #d8cfb8; stroke-width: 1.5; }
+.mjm__rail { fill: none; stroke: #9aa4b2; stroke-width: 1.6; stroke-dasharray: 5 4; }
+.mjm__ring { fill: rgba(26, 111, 224, 0.04); stroke: var(--blue); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.55; }
+.mjm__ringlabel { font-size: 11px; fill: var(--blue-dark); font-weight: 600; }
+.mjm__water { font-size: 13px; fill: #6b93bd; font-style: italic; letter-spacing: 0.08em; }
+.mjm__area { font-size: 11px; fill: #667085; paint-order: stroke; stroke: #f4efe3; stroke-width: 3px; pointer-events: none; }
+
+.mjm__origin { fill: var(--navy); stroke: #fff; stroke-width: 2; }
+.mjm__originlabel { font-size: 12px; font-weight: 700; fill: var(--navy); paint-order: stroke; stroke: #f4efe3; stroke-width: 3px; }
+
+.mjm__pin { cursor: pointer; outline: none; }
+.mjm__pinhalo { fill: rgba(26, 111, 224, 0.18); transition: r 0.15s ease; }
+.mjm__pindot { fill: var(--blue); stroke: #fff; stroke-width: 2; transition: r 0.15s ease; }
+.mjm__pin.is-urgent .mjm__pinhalo { fill: rgba(245, 165, 36, 0.28); }
+.mjm__pin.is-urgent .mjm__pindot { fill: var(--gold); }
+.mjm__pin.is-selected .mjm__pinhalo { fill: rgba(10, 17, 32, 0.2); }
+.mjm__pin:hover .mjm__pinhalo,
+.mjm__pin:focus-visible .mjm__pinhalo { fill: rgba(10, 17, 32, 0.22); }
+.mjm__pin.is-selected { }
+.mjm__paybg { fill: #fff; stroke: var(--line); }
+.mjm__pin.is-selected .mjm__paybg { fill: var(--navy); stroke: var(--navy); }
+.mjm__paytext { font-size: 10.5px; font-weight: 700; fill: var(--navy); }
+.mjm__pin.is-selected .mjm__paytext { fill: #fff; }
+
+.mjm__legend { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 12px; padding: 5px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); font-size: 11px; color: var(--muted); }
+.mjm__legend span { display: inline-flex; align-items: center; gap: 5px; }
+.mjm__dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.mjm__dot--job { background: var(--blue); }
+.mjm__dot--urgent { background: var(--gold); }
+.mjm__dot--origin { background: var(--navy); }
+
+.mjm__selected { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: rgba(255, 255, 255, 0.85); min-height: 64px; }
+.mjm__selected-top { display: flex; gap: 6px; margin-bottom: 6px; }
+.mjm__selected-title { font-size: 15px; font-weight: 700; color: var(--navy); line-height: 1.35; }
+.mjm__selected-co { font-size: 12px; color: var(--muted); margin: 2px 0 8px; }
+.mjm__selected-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.mjm__selected-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.mjm__selected-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.mjm__selected-foot small { display: block; font-size: 11px; color: var(--muted); }
+.mjm__selected-foot strong { font-size: 16px; color: var(--navy); }
+.mjm__hint { font-size: 13px; color: var(--muted); }
+
+/* Find Jobs: map view = map + compact sorted list side by side */
+.mjm-layout { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 20px; align-items: start; }
+.mjm-layout__map { position: sticky; top: 90px; }
+.mjm-list { display: flex; flex-direction: column; gap: 10px; max-height: 760px; overflow-y: auto; padding-right: 4px; }
+.mjm-item { cursor: pointer; display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.85); border-radius: 12px; padding: 12px 14px; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.mjm-item:hover { border-color: var(--blue); }
+.mjm-item.is-selected { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(26, 111, 224, 0.18); }
+.mjm-item__title { font-size: 14px; font-weight: 700; color: var(--navy); line-height: 1.35; }
+.mjm-item__sub { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.mjm-item__sub span { display: inline-flex; align-items: center; gap: 4px; }
+.mjm-item__pay { font-size: 14px; font-weight: 700; color: var(--navy); white-space: nowrap; }
+.mjm-item__row { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+
+.dist-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--blue-dark); background: var(--sky); border-radius: 999px; padding: 2px 8px; }
+
+@media (max-width: 900px) {
+  .mjm-layout { grid-template-columns: 1fr; }
+  .mjm-layout__map { position: static; }
+  .mjm-list { max-height: none; }
+}
+
+.mjm-item__cta { display: inline-flex; align-items: center; gap: 2px; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--blue); }
+.mjm-item:hover .mjm-item__cta { text-decoration: underline; }

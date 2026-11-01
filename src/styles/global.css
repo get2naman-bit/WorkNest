@@ -1,0 +1,36 @@
+:root {
+  --navy: #0a1120;
+  --ink: #0d1424;
+  --blue: #1a6fe0;
+  --blue-dark: #1558b8;
+  --sky: #e9f2fc;
+  --sky-strong: #d3e8fb;
+  --sand: #fbf3e3;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --green: #12813a;
+  --gold: #f5a524;
+  --radius: 12px;
+  --container: 1120px;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; color: var(--ink); background: #fff; -webkit-font-smoothing: antialiased; font-size: 16px; line-height: 1.6; }
+h1, h2, h3, h4, p, ul { margin: 0; }
+ul { padding: 0; list-style: none; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; cursor: pointer; }
+img, svg { display: block; max-width: 100%; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+.container { width: 100%; max-width: var(--container); margin: 0 auto; padding: 0 24px; }
+/* NOTE: .section carries no padding on purpose. Each section stylesheet
+   (.problem, .solution, .features, .how, .audiences, .cta) owns its own
+   vertical rhythm, and component CSS loads before global.css. */
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); margin-bottom: 14px; }
+.h2 { font-size: clamp(30px, 4.5vw, 44px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.18; }
+.lead { color: var(--muted); font-size: 17px; line-height: 1.7; }
+
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }

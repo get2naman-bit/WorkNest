@@ -1,0 +1,2 @@
+.footer { border-top: 1px solid var(--line); padding: 24px 0; font-size: 14px; color: var(--muted); }
+.footer__inner { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }

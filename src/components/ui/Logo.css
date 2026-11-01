@@ -1,0 +1,8 @@
+.logo { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.02em; }
+.logo__mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--blue); color: #fff; }
+.logo--lg .logo__mark { width: 40px; height: 40px; border-radius: 10px; }
+.logo--lg { font-size: 26px; }
+.logo--md { font-size: 18px; }
+.logo--sm { font-size: 17px; }
+.logo--sm .logo__mark { width: 27px; height: 27px; border-radius: 8px; }
+.logo__word span { color: var(--blue); }
