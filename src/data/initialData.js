@@ -488,6 +488,14 @@ export const INITIAL_APPLICATIONS = [
     coverNote: 'Hi Meera, I specialize in commercial tank replacements and have installed over 40 AO Smith units. Ready to start tomorrow morning with full gear.',
     expectedRate: '₹18,500 fixed',
     phone: '+91 98200 10149',
+    bookingDate: new Date(Date.now() + 25 * 60 * 1000).toISOString().slice(0, 10),
+    bookingTime: new Date(Date.now() + 25 * 60 * 1000).toTimeString().slice(0, 5),
+    bookingDateTime: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
+    startAddress: 'Dadar West, Mumbai',
+    destinationAddress: 'Nariman Point, Mumbai',
+    otp: '4892',
+    otpVerified: false,
+    orderStatus: 'en_route',
   },
   {
     id: 'app2',
@@ -542,6 +550,14 @@ export const INITIAL_APPLICATIONS = [
     coverNote: 'Over 80 homes painted across South Mumbai. Available this week with full crew or solo.',
     expectedRate: '₹45,000',
     phone: '+91 98200 10164',
+    bookingDate: new Date(Date.now() + 20 * 60 * 1000).toISOString().slice(0, 10),
+    bookingTime: new Date(Date.now() + 20 * 60 * 1000).toTimeString().slice(0, 5),
+    bookingDateTime: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+    startAddress: 'Bandra West, Mumbai',
+    destinationAddress: 'Marine Lines, South Mumbai',
+    otp: '7341',
+    otpVerified: false,
+    orderStatus: 'en_route',
   }
 ];
 
