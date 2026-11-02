@@ -710,13 +710,64 @@ export function AppProvider({ children }) {
       }
     }
 
+    let extraFields = {};
+    if (newStatus === 'accepted' && (!app.bookingDateTime || !app.otp)) {
+      // Default booking scheduled 25 minutes from now so live tracking activates within the 30-min window
+      const bookingDateObj = new Date(Date.now() + 25 * 60 * 1000);
+      const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      extraFields = {
+        bookingDate: bookingDateObj.toISOString().slice(0, 10),
+        bookingTime: bookingDateObj.toTimeString().slice(0, 5),
+        bookingDateTime: bookingDateObj.toISOString(),
+        startAddress: app.startAddress || 'South Congress Ave & Riverside Dr, Austin, TX',
+        destinationAddress: app.destinationAddress || 'Austin, TX (Client Job Site)',
+        otp: app.otp || generatedOtp,
+        otpVerified: false,
+        orderStatus: 'en_route',
+      };
+    }
+
     setState((prev) => ({
       ...prev,
       applications: prev.applications.map((a) =>
-        a.id === appId ? { ...a, status: newStatus } : a
+        a.id === appId ? { ...a, status: newStatus, ...extraFields } : a
       ),
       notifications: [workerNotif, ...prev.notifications],
     }));
+  };
+
+  const updateBookingSchedule = (appId, { bookingDateTime, bookingDate, bookingTime }) => {
+    setState((prev) => ({
+      ...prev,
+      applications: prev.applications.map((a) => {
+        if (a.id !== appId) return a;
+        const dt = bookingDateTime || `${bookingDate}T${bookingTime}:00`;
+        return {
+          ...a,
+          bookingDateTime: dt,
+          bookingDate: bookingDate || a.bookingDate,
+          bookingTime: bookingTime || a.bookingTime,
+        };
+      }),
+    }));
+  };
+
+  const verifyOrderOtp = (appId, inputOtp) => {
+    const app = applications.find((a) => a.id === appId);
+    if (!app) return { success: false, error: 'Order not found' };
+    if (String(app.otp).trim() !== String(inputOtp).trim()) {
+      return { success: false, error: 'Invalid OTP code. Please re-check with employer.' };
+    }
+
+    setState((prev) => ({
+      ...prev,
+      applications: prev.applications.map((a) =>
+        a.id === appId
+          ? { ...a, otpVerified: true, orderStatus: 'arrived_started' }
+          : a
+      ),
+    }));
+    return { success: true };
   };
 
   const postJob = async (jobData) => {
@@ -1144,6 +1195,8 @@ export function AppProvider({ children }) {
         applyToJob,
         withdrawApplication,
         updateApplicationStatus,
+        updateBookingSchedule,
+        verifyOrderOtp,
         postJob,
         setJobStatus,
         closeJob,

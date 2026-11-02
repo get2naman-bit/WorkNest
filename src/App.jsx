@@ -16,6 +16,7 @@ import FindWorkersPage from './pages/FindWorkersPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
 import NotificationsPage from './pages/NotificationsPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import LiveTrackingPage from './pages/LiveTrackingPage.jsx';
 
 import AppHeader from './components/layout/AppHeader.jsx';
 import Footer from './components/layout/Footer.jsx';
@@ -153,6 +154,24 @@ export default function App() {
                 <RequireAuth role="employer">
                   <ManageApplicationsPage />
                 </RequireAuth>
+              </AppLayout>
+            }
+          />
+
+          {/* Live Order GPS Tracking & OTP */}
+          <Route
+            path="/tracking"
+            element={
+              <AppLayout>
+                <LiveTrackingPage />
+              </AppLayout>
+            }
+          />
+          <Route
+            path="/tracking/:id"
+            element={
+              <AppLayout>
+                <LiveTrackingPage />
               </AppLayout>
             }
           />

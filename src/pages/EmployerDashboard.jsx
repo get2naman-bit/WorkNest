@@ -13,6 +13,7 @@ import {
   Award,
   Search,
   ExternalLink,
+  Navigation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -297,6 +298,17 @@ export default function EmployerDashboard() {
                       >
                         Shortlist
                       </Button>
+                    )}
+                    {app.status === 'accepted' && (
+                      <Link to={`/tracking/${app.id}`}>
+                        <Button
+                          variant="blue"
+                          size="sm"
+                          style={{ background: '#0284c7', borderColor: '#0284c7' }}
+                        >
+                          <Navigation size={12} /> Track Live
+                        </Button>
+                      </Link>
                     )}
                     {app.status !== 'accepted' && (
                       <Button

@@ -290,6 +290,14 @@ export const INITIAL_APPLICATIONS = [
     coverNote: 'Hi Sarah, I specialize in commercial tank replacements and have installed over 40 AO Smith units. Ready to start tomorrow morning with full gear.',
     expectedRate: '$950 fixed',
     phone: '+1 (512) 555-0149',
+    bookingDate: new Date(Date.now() + 25 * 60 * 1000).toISOString().slice(0, 10),
+    bookingTime: new Date(Date.now() + 25 * 60 * 1000).toTimeString().slice(0, 5),
+    bookingDateTime: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
+    startAddress: 'South Congress Ave & Riverside Dr, Austin, TX',
+    destinationAddress: '200 Congress Ave, Downtown Austin, TX',
+    otp: '4892',
+    otpVerified: false,
+    orderStatus: 'en_route',
   },
   {
     id: 'app2',
@@ -344,6 +352,14 @@ export const INITIAL_APPLICATIONS = [
     coverNote: 'Over 80 homes painted in Austin. Available this week with full crew or solo.',
     expectedRate: '$2,400',
     phone: '+1 (512) 555-0164',
+    bookingDate: new Date(Date.now() + 20 * 60 * 1000).toISOString().slice(0, 10),
+    bookingTime: new Date(Date.now() + 20 * 60 * 1000).toTimeString().slice(0, 5),
+    bookingDateTime: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+    startAddress: '1400 E 4th St, East Austin, TX',
+    destinationAddress: '4300 Speedway, Hyde Park, Austin, TX',
+    otp: '7341',
+    otpVerified: false,
+    orderStatus: 'en_route',
   }
 ];
 
