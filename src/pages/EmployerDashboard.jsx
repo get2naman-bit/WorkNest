@@ -13,6 +13,7 @@ import {
   Award,
   Search,
   ExternalLink,
+  Navigation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -97,7 +98,7 @@ export default function EmployerDashboard() {
           </div>
 
           <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '8px' }}>
-            {currentUser?.name || 'Meera Kulkarni'}
+            {currentUser?.name || 'Sarah Jenkins'}
           </h1>
           <p style={{ color: '#cbd5e1', fontSize: '15px', maxWidth: '580px' }}>
             Manage your open trade listings, review applicant credentials, and hire verified
@@ -297,6 +298,17 @@ export default function EmployerDashboard() {
                       >
                         Shortlist
                       </Button>
+                    )}
+                    {app.status === 'accepted' && (
+                      <Link to={`/tracking/${app.id}`}>
+                        <Button
+                          variant="blue"
+                          size="sm"
+                          style={{ background: '#0284c7', borderColor: '#0284c7' }}
+                        >
+                          <Navigation size={12} /> Track Live
+                        </Button>
+                      </Link>
                     )}
                     {app.status !== 'accepted' && (
                       <Button
