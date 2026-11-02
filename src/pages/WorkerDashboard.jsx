@@ -17,6 +17,7 @@ import {
   Calendar,
   ArrowRight,
   Sparkles,
+  Navigation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -199,6 +200,72 @@ export default function WorkerDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Active Hired / Accepted Orders Quick Access */}
+      {acceptedCount > 0 && (
+        <div
+          className="card"
+          style={{
+            background: 'linear-gradient(135deg, #0a1120 0%, #0f172a 100%)',
+            color: '#fff',
+            padding: '24px',
+            marginBottom: '32px',
+            borderRadius: 'var(--radius)',
+            border: '1px solid rgba(56, 189, 248, 0.3)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '16px',
+            boxShadow: '0 8px 24px rgba(10, 17, 32, 0.15)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: 'rgba(56, 189, 248, 0.15)',
+                color: '#38bdf8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Navigation size={24} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span className="badge badge--green" style={{ fontSize: '11px' }}>
+                  ACTIVE HIRED ASSIGNMENT
+                </span>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  {acceptedCount} active hired order{acceptedCount > 1 ? 's' : ''}
+                </span>
+              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#f8fafc' }}>
+                {myApplications.find((a) => a.status === 'accepted')?.jobTitle || 'Active Job Order'}
+              </h3>
+              <p style={{ fontSize: '13px', color: '#cbd5e1', marginTop: '2px', margin: 0 }}>
+                Live GPS route streaming &bull; Client requires arrival verification code
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Link to={`/tracking/${myApplications.find((a) => a.status === 'accepted')?.id || ''}`}>
+              <Button
+                variant="blue"
+                size="md"
+                style={{ background: '#0284c7', borderColor: '#0284c7' }}
+              >
+                <Navigation size={15} /> Launch Live GPS & OTP
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* 2-Column Main Layout: Recommended Jobs & Profile Readiness */}
       <div className="layout-split">

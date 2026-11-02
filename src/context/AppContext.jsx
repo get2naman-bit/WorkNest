@@ -18,10 +18,12 @@ import {
   INITIAL_APPLICATIONS,
   INITIAL_WORK_HISTORY,
   INITIAL_REVIEWS,
+  INITIAL_CONVERSATIONS,
+  INITIAL_NOTIFICATIONS,
 } from '../data/initialData.js';
 
-const STORAGE_KEY = 'worknest_state_v2';
-const LEGACY_STORAGE_KEY = 'worknest_state_v1';
+const STORAGE_KEY = 'worknest_state_v3';
+const LEGACY_STORAGE_KEY = 'worknest_state_v2';
 const CREDENTIALS_KEY = 'worknest_credentials_v1';
 
 // Sample accounts are showcase content only. They deliberately have no
@@ -38,9 +40,8 @@ const createInitialState = () => ({
   savedJobIds: [],
   workHistory: INITIAL_WORK_HISTORY,
   reviews: INITIAL_REVIEWS,
-  // Private content (messages, notifications) belongs to real accounts only.
-  conversations: [],
-  notifications: [],
+  conversations: INITIAL_CONVERSATIONS || [],
+  notifications: INITIAL_NOTIFICATIONS || [],
 });
 
 const makeId = () => {
@@ -106,7 +107,7 @@ function buildUserRecord({ id, role, name, email, ...rest }) {
     name: name || '',
     email: email || '',
     phone: '',
-    location: 'Austin, TX',
+    location: 'Fort, Mumbai',
     companyName: '',
     title: '',
     bio: '',
@@ -204,8 +205,14 @@ export function AppProvider({ children }) {
       applications:
         liveApps.status === 'fulfilled' ? mergeById(liveApps.value, prev.applications) : prev.applications,
       savedJobIds: liveSaved.status === 'fulfilled' ? liveSaved.value : prev.savedJobIds,
-      conversations: liveConvs.status === 'fulfilled' ? liveConvs.value : prev.conversations,
-      notifications: liveNotifs.status === 'fulfilled' ? liveNotifs.value : prev.notifications,
+      conversations:
+        liveConvs.status === 'fulfilled' && liveConvs.value?.length
+          ? mergeById(liveConvs.value, prev.conversations)
+          : prev.conversations,
+      notifications:
+        liveNotifs.status === 'fulfilled' && liveNotifs.value?.length
+          ? mergeById(liveNotifs.value, prev.notifications)
+          : prev.notifications,
     }));
   };
 
@@ -379,7 +386,7 @@ export function AppProvider({ children }) {
           password: userData.password,
           role: userData.role,
           name: userData.name,
-          location: userData.location || 'Austin, TX',
+          location: userData.location || 'Fort, Mumbai',
           companyName: userData.role === 'employer' ? userData.companyName || '' : '',
           title: userData.role === 'worker' ? userData.title || '' : '',
           skills: userData.role === 'worker' && userData.title ? [userData.title] : [],
@@ -417,7 +424,7 @@ export function AppProvider({ children }) {
             role: user.user_metadata?.role || userData.role,
             name: user.user_metadata?.name || userData.name,
             email: user.email || normalizedEmail,
-            location: user.user_metadata?.location || 'Austin, TX',
+            location: user.user_metadata?.location || 'Fort, Mumbai',
             companyName: user.user_metadata?.companyName || '',
             title: user.user_metadata?.title || '',
             skills: Array.isArray(user.user_metadata?.skills) ? user.user_metadata.skills : [],
@@ -448,7 +455,7 @@ export function AppProvider({ children }) {
       role: userData.role,
       name: userData.name,
       email: normalizedEmail,
-      location: userData.location || 'Austin, TX',
+      location: userData.location || 'Fort, Mumbai',
       phone: userData.phone || '',
       companyName: userData.role === 'employer' ? userData.companyName || '' : '',
       title: userData.role === 'worker' ? userData.title || '' : '',
@@ -719,8 +726,8 @@ export function AppProvider({ children }) {
         bookingDate: bookingDateObj.toISOString().slice(0, 10),
         bookingTime: bookingDateObj.toTimeString().slice(0, 5),
         bookingDateTime: bookingDateObj.toISOString(),
-        startAddress: app.startAddress || 'South Congress Ave & Riverside Dr, Austin, TX',
-        destinationAddress: app.destinationAddress || 'Austin, TX (Client Job Site)',
+        startAddress: app.startAddress || 'Dadar West, Mumbai',
+        destinationAddress: app.destinationAddress || 'Nariman Point, Mumbai (Client Job Site)',
         otp: app.otp || generatedOtp,
         otpVerified: false,
         orderStatus: 'en_route',
@@ -844,10 +851,10 @@ export function AppProvider({ children }) {
   // MESSAGES
   // ==========================================
   const sendMessage = async ({ conversationId, recipientId, jobId, jobTitle, text }) => {
-    if (!currentUser || !text.trim()) return null;
+    if (!text?.trim()) return null;
 
-    const senderId = currentUser.id;
-    const senderName = currentUser.name;
+    const senderId = currentUser?.id || 'guest_user';
+    const senderName = currentUser?.name || 'You';
     const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const newMessage = {
@@ -988,6 +995,47 @@ export function AppProvider({ children }) {
         notifications: [msgNotif, ...prev.notifications],
       };
     });
+
+    // If recipient is a demo account (e.g. w1, w2, e1, e2), simulate a natural live response
+    if (recipientId && ['w1', 'w2', 'w3', 'w4', 'e1', 'e2'].includes(recipientId)) {
+      setTimeout(() => {
+        const replyTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const autoReplies = [
+          `Thanks for reaching out! I received your message: "${text.substring(0, 40)}${text.length > 40 ? '...' : ''}". I am available and reviewing the specs right now.`,
+          `Got it! I have noted down the details. Let's coordinate on the location and timing.`,
+          `Understood! All required tools and equipment are ready on my end. Looking forward to completing this work seamlessly.`,
+          `Thank you for confirming. I will keep you posted as soon as we commence on-site!`,
+        ];
+        const autoText = autoReplies[Math.floor(Math.random() * autoReplies.length)];
+
+        const replyMsg = {
+          id: `msg_reply_${Date.now()}`,
+          senderId: recipientId,
+          senderName: recipientName,
+          text: autoText,
+          time: replyTime,
+        };
+
+        setState((prev) => ({
+          ...prev,
+          conversations: prev.conversations.map((c) => {
+            if (
+              c.id === (resolvedConv?.id || conversationId) ||
+              (c.participant1Id === recipientId && c.participant2Id === senderId) ||
+              (c.participant2Id === recipientId && c.participant1Id === senderId)
+            ) {
+              return {
+                ...c,
+                lastMessage: autoText,
+                lastMessageTime: replyTime,
+                messages: [...(c.messages || []), replyMsg],
+              };
+            }
+            return c;
+          }),
+        }));
+      }, 1500);
+    }
 
     return newMessage;
   };

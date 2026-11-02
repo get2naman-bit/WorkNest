@@ -399,6 +399,25 @@ export default function FindJobsPage() {
                 }}
               >
                 <div>
+                  {job.bannerImage && (
+                    <div
+                      style={{
+                        width: 'calc(100% + 40px)',
+                        margin: '-20px -20px 14px -20px',
+                        height: '140px',
+                        overflow: 'hidden',
+                        borderRadius: 'var(--radius) var(--radius) 0 0',
+                        borderBottom: '1px solid var(--line)',
+                      }}
+                    >
+                      <img
+                        src={job.bannerImage}
+                        alt={job.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                  )}
+
                   <div
                     style={{
                       display: 'flex',

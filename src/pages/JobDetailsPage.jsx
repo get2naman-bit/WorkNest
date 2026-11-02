@@ -137,6 +137,24 @@ export default function JobDetailsPage() {
         {/* Left Column: Job Details */}
         <div>
           <div className="card" style={{ marginBottom: '24px' }}>
+            {job.bannerImage && (
+              <div
+                style={{
+                  width: '100%',
+                  maxHeight: '260px',
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                  marginBottom: '20px',
+                  border: '1px solid var(--line)',
+                }}
+              >
+                <img
+                  src={job.bannerImage}
+                  alt={job.title}
+                  style={{ width: '100%', height: '260px', objectFit: 'cover' }}
+                />
+              </div>
+            )}
             <div
               style={{
                 display: 'flex',
@@ -456,8 +474,8 @@ export default function JobDetailsPage() {
             </div>
 
             <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, marginBottom: '14px' }}>
-              Austin-based contractor specializing in high-quality builds and ongoing trade
-              collaborations.
+              Mumbai-based contractor specializing in high-quality builds and ongoing trade
+              collaborations across the metropolitan area.
             </p>
 
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--muted)' }}>

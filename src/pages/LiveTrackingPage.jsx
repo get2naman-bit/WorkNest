@@ -22,12 +22,12 @@ import Button from '../components/ui/Button.jsx';
 import Toast from '../components/ui/Toast.jsx';
 import './LiveTrackingPage.css';
 
-// Approximate coordinate interpolation along route
-// Start near Austin S Congress (30.252, -97.749) to Downtown/Hyde Park (30.298, -97.729)
-const START_LAT = 30.2520;
-const START_LNG = -97.7495;
-const END_LAT = 30.2985;
-const END_LNG = -97.7290;
+// Mumbai geographical coordinates along route
+// Start near Dadar West (19.0178, 72.8478) to Nariman Point / Fort (18.9256, 72.8244)
+const START_LAT = 19.0178;
+const START_LNG = 72.8478;
+const END_LAT = 18.9256;
+const END_LNG = 72.8244;
 
 export default function LiveTrackingPage() {
   const { id } = useParams(); // Can be application id or job id
@@ -54,6 +54,32 @@ export default function LiveTrackingPage() {
   const [isSimulatingMove, setIsSimulatingMove] = useState(true);
   const [progressRatio, setProgressRatio] = useState(0.45); // 0 to 1 along route
   const [overrideWindow, setOverrideWindow] = useState(false); // Quick toggle for demo preview
+  const [liveGpsCoords, setLiveGpsCoords] = useState(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [gpsActive, setGpsActive] = useState(false);
+
+  // Attempt real device GPS position via browser Geolocation API
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setLiveGpsCoords({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+        setGpsAccuracy(Math.round(pos.coords.accuracy || 8));
+        setGpsActive(true);
+      },
+      (err) => {
+        console.warn('Live device GPS unavailable or permission denied:', err.message);
+        setGpsActive(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   // Tick timer every second to keep live countdown accurate
   useEffect(() => {
@@ -63,12 +89,12 @@ export default function LiveTrackingPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Simulate worker GPS vehicle movement along route
+  // Worker GPS vehicle movement along route
   useEffect(() => {
-    if (!isSimulatingMove || (application?.otpVerified)) return;
+    if (!isSimulatingMove || application?.otpVerified) return;
     const interval = setInterval(() => {
       setProgressRatio((prev) => {
-        if (prev >= 0.95) return 0.95; // Arrived
+        if (prev >= 0.96) return 0.96; // Arrived
         return prev + 0.015;
       });
     }, 2500);
@@ -99,31 +125,31 @@ export default function LiveTrackingPage() {
   const isWithin30MinWindow = msUntilBooking <= 30 * 60 * 1000 && msUntilBooking > -180 * 60 * 1000;
   const isWindowActive = isWithin30MinWindow || overrideWindow;
 
-  // Real-time calculated worker coordinates
-  const currentLat = START_LAT + (END_LAT - START_LAT) * progressRatio;
-  const currentLng = START_LNG + (END_LNG - START_LNG) * progressRatio;
+  // Real-time calculated worker coordinates (uses live hardware GPS if available, otherwise route interpolation)
+  const currentLat = liveGpsCoords ? liveGpsCoords.lat : START_LAT + (END_LAT - START_LAT) * progressRatio;
+  const currentLng = liveGpsCoords ? liveGpsCoords.lng : START_LNG + (END_LNG - START_LNG) * progressRatio;
 
   // Minutes required to arrive based on remaining distance
   const minutesRequired = Math.max(1, Math.round((1 - progressRatio) * 18));
-  const distanceRemainingKm = Math.max(0.2, ((1 - progressRatio) * 6.4)).toFixed(1);
+  const distanceRemainingKm = Math.max(0.2, ((1 - progressRatio) * 11.2)).toFixed(1);
 
   const isWorker = currentUser?.role === 'worker' || currentUser?.id === application.workerId;
-  const isEmployer = currentUser?.role === 'employer' || currentUser?.id === application.employerId;
+  const isEmployer = currentUser?.role === 'employer' || currentUser?.id === application.employerId || (!currentUser?.role && !isWorker);
 
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setOtpError('');
     if (!otpInput.trim()) {
-      setOtpError('Please enter the 4-digit OTP provided by the employer.');
+      setOtpError('Please enter the 4-digit OTP provided by the worker.');
       return;
     }
     const res = verifyOrderOtp(application.id, otpInput);
     if (res.success) {
-      setToastMsg('OTP Verified Successfully! Job is now safely in-progress.');
+      setToastMsg('OTP Verified Successfully! Worker arrival confirmed and job session started.');
       setIsSimulatingMove(false);
       setProgressRatio(1);
     } else {
-      setOtpError(res.error || 'Incorrect OTP code. Please verify with employer.');
+      setOtpError(res.error || 'Incorrect OTP code. Please verify with the worker on site.');
     }
   };
 
@@ -480,7 +506,7 @@ export default function LiveTrackingPage() {
                       Worker Starting Location
                     </span>
                     <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
-                      {application.startAddress || 'Austin Central Dispatch'}
+                      {application.startAddress || 'Dadar Dispatch Hub, Mumbai'}
                     </p>
                   </div>
                 </div>
@@ -494,7 +520,7 @@ export default function LiveTrackingPage() {
                       Destination / Client Address
                     </span>
                     <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
-                      {application.destinationAddress || 'Client Site, Austin, TX'}
+                      {application.destinationAddress || 'Nariman Point, Mumbai (Client Job Site)'}
                     </p>
                   </div>
                 </div>
@@ -509,7 +535,7 @@ export default function LiveTrackingPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <KeyRound size={20} color="#38bdf8" />
                     <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>
-                      Secure Service OTP
+                      Client-Verified Service OTP
                     </h3>
                   </div>
                   {application.otpVerified && (
@@ -520,23 +546,30 @@ export default function LiveTrackingPage() {
                 </div>
 
                 <p style={{ fontSize: '13px', color: '#93c5fd', marginTop: '8px', lineHeight: 1.5 }}>
-                  {isEmployer
-                    ? 'Share this one-time code with the worker upon arrival to verify identity and unlock order completion.'
-                    : 'Ask the employer for this 4-digit code once you arrive at the job location to verify arrival.'}
+                  {isWorker
+                    ? 'Provide this secure 4-digit code to the user/client upon reaching their address to verify your arrival.'
+                    : 'Ask the worker for their 4-digit arrival code and enter it below to confirm worker arrival on site.'}
                 </p>
 
-                {/* Big OTP Digits Display */}
-                <div className="tracking-otp-display">
-                  {String(application.otp || '5921')
-                    .split('')
-                    .map((digit, idx) => (
-                      <div key={idx} className="tracking-otp-digit">
-                        {digit}
-                      </div>
-                    ))}
-                </div>
+                {/* Worker View: Big OTP Digits Display */}
+                {isWorker && (
+                  <div>
+                    <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#cbd5e1', letterSpacing: '0.05em', fontWeight: 700 }}>
+                      Your Worker Arrival Code:
+                    </span>
+                    <div className="tracking-otp-display">
+                      {String(application.otp || '5921')
+                        .split('')
+                        .map((digit, idx) => (
+                          <div key={idx} className="tracking-otp-digit">
+                            {digit}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
 
-                {/* Worker OTP Entry Form */}
+                {/* Employer / User View: OTP Verification Form */}
                 {!application.otpVerified ? (
                   <form onSubmit={handleVerifyOtp} style={{ marginTop: '16px' }}>
                     <label
@@ -549,14 +582,16 @@ export default function LiveTrackingPage() {
                         marginBottom: '6px',
                       }}
                     >
-                      {isWorker ? 'Verify Employer Code at Arrival:' : 'Test Code Verification:'}
+                      {isEmployer
+                        ? 'Enter Worker OTP Code to Confirm Arrival:'
+                        : 'Simulate User-Side Verification (Test):'}
                     </label>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
                         id="otpInput"
                         type="text"
                         maxLength={4}
-                        placeholder="Enter 4-digit OTP"
+                        placeholder={isWorker ? `Worker code: ${application.otp || '5921'}` : 'Enter 4-digit OTP'}
                         value={otpInput}
                         onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                         style={{
@@ -585,7 +620,7 @@ export default function LiveTrackingPage() {
                           cursor: 'pointer',
                         }}
                       >
-                        Verify
+                        Verify & Start
                       </button>
                     </div>
                     {otpError && (
