@@ -24,28 +24,6 @@ const STORAGE_KEY = 'worknest_state_v2';
 const LEGACY_STORAGE_KEY = 'worknest_state_v1';
 const CREDENTIALS_KEY = 'worknest_credentials_v1';
 
-// Bump when the bundled sample data changes. On load, previously saved browser
-// state has its sample records swapped for the current ones; anything the
-// person created themselves (accounts, jobs, applications) is kept.
-const SEED_VERSION = 'mumbai-1';
-
-function refreshSeedData(saved) {
-  if (!saved || saved.seedVersion === SEED_VERSION) return saved;
-  const swap = (list, seed) => {
-    const seedIds = new Set(seed.map((item) => item.id));
-    return [...seed, ...(Array.isArray(list) ? list : []).filter((item) => !seedIds.has(item.id))];
-  };
-  return {
-    ...saved,
-    users: swap(saved.users, INITIAL_USERS),
-    jobs: swap(saved.jobs, INITIAL_JOBS),
-    applications: swap(saved.applications, INITIAL_APPLICATIONS),
-    workHistory: swap(saved.workHistory, INITIAL_WORK_HISTORY),
-    reviews: swap(saved.reviews, INITIAL_REVIEWS),
-    seedVersion: SEED_VERSION,
-  };
-}
-
 // Sample accounts are showcase content only. They deliberately have no
 // password and can never be signed into.
 const SAMPLE_ACCOUNT_EMAILS = new Set(INITIAL_USERS.map((u) => u.email.toLowerCase()));
@@ -53,7 +31,6 @@ const SAMPLE_ACCOUNT_EMAILS = new Set(INITIAL_USERS.map((u) => u.email.toLowerCa
 const AppContext = createContext(null);
 
 const createInitialState = () => ({
-  seedVersion: SEED_VERSION,
   currentUser: null,
   users: INITIAL_USERS,
   jobs: INITIAL_JOBS,
@@ -129,11 +106,11 @@ function buildUserRecord({ id, role, name, email, ...rest }) {
     name: name || '',
     email: email || '',
     phone: '',
-    location: 'Fort, Mumbai',
+    location: 'Austin, TX',
     companyName: '',
     title: '',
     bio: '',
-    hourlyRate: '₹550/hr',
+    hourlyRate: '$45/hr',
     availability: 'Available Now',
     rating: 5,
     reviewsCount: 0,
@@ -154,7 +131,7 @@ export function AppProvider({ children }) {
   const [state, setState] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return { ...createInitialState(), ...refreshSeedData(JSON.parse(saved)) };
+      if (saved) return { ...createInitialState(), ...JSON.parse(saved) };
     } catch (e) {
       console.warn('Local storage parse error:', e);
     }
@@ -335,7 +312,7 @@ export function AppProvider({ children }) {
             role: user.user_metadata?.role || 'worker',
             name: user.user_metadata?.name || normalizedEmail.split('@')[0],
             email: user.email || normalizedEmail,
-            location: user.user_metadata?.location || 'Fort, Mumbai',
+            location: user.user_metadata?.location || 'Austin, TX',
             companyName: user.user_metadata?.companyName || '',
             title: user.user_metadata?.title || '',
             verified: Boolean(user.email_confirmed_at),
@@ -402,7 +379,7 @@ export function AppProvider({ children }) {
           password: userData.password,
           role: userData.role,
           name: userData.name,
-          location: userData.location || 'Fort, Mumbai',
+          location: userData.location || 'Austin, TX',
           companyName: userData.role === 'employer' ? userData.companyName || '' : '',
           title: userData.role === 'worker' ? userData.title || '' : '',
           skills: userData.role === 'worker' && userData.title ? [userData.title] : [],
@@ -440,7 +417,7 @@ export function AppProvider({ children }) {
             role: user.user_metadata?.role || userData.role,
             name: user.user_metadata?.name || userData.name,
             email: user.email || normalizedEmail,
-            location: user.user_metadata?.location || 'Fort, Mumbai',
+            location: user.user_metadata?.location || 'Austin, TX',
             companyName: user.user_metadata?.companyName || '',
             title: user.user_metadata?.title || '',
             skills: Array.isArray(user.user_metadata?.skills) ? user.user_metadata.skills : [],
@@ -471,7 +448,7 @@ export function AppProvider({ children }) {
       role: userData.role,
       name: userData.name,
       email: normalizedEmail,
-      location: userData.location || 'Fort, Mumbai',
+      location: userData.location || 'Austin, TX',
       phone: userData.phone || '',
       companyName: userData.role === 'employer' ? userData.companyName || '' : '',
       title: userData.role === 'worker' ? userData.title || '' : '',
@@ -733,13 +710,64 @@ export function AppProvider({ children }) {
       }
     }
 
+    let extraFields = {};
+    if (newStatus === 'accepted' && (!app.bookingDateTime || !app.otp)) {
+      // Default booking scheduled 25 minutes from now so live tracking activates within the 30-min window
+      const bookingDateObj = new Date(Date.now() + 25 * 60 * 1000);
+      const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      extraFields = {
+        bookingDate: bookingDateObj.toISOString().slice(0, 10),
+        bookingTime: bookingDateObj.toTimeString().slice(0, 5),
+        bookingDateTime: bookingDateObj.toISOString(),
+        startAddress: app.startAddress || 'South Congress Ave & Riverside Dr, Austin, TX',
+        destinationAddress: app.destinationAddress || 'Austin, TX (Client Job Site)',
+        otp: app.otp || generatedOtp,
+        otpVerified: false,
+        orderStatus: 'en_route',
+      };
+    }
+
     setState((prev) => ({
       ...prev,
       applications: prev.applications.map((a) =>
-        a.id === appId ? { ...a, status: newStatus } : a
+        a.id === appId ? { ...a, status: newStatus, ...extraFields } : a
       ),
       notifications: [workerNotif, ...prev.notifications],
     }));
+  };
+
+  const updateBookingSchedule = (appId, { bookingDateTime, bookingDate, bookingTime }) => {
+    setState((prev) => ({
+      ...prev,
+      applications: prev.applications.map((a) => {
+        if (a.id !== appId) return a;
+        const dt = bookingDateTime || `${bookingDate}T${bookingTime}:00`;
+        return {
+          ...a,
+          bookingDateTime: dt,
+          bookingDate: bookingDate || a.bookingDate,
+          bookingTime: bookingTime || a.bookingTime,
+        };
+      }),
+    }));
+  };
+
+  const verifyOrderOtp = (appId, inputOtp) => {
+    const app = applications.find((a) => a.id === appId);
+    if (!app) return { success: false, error: 'Order not found' };
+    if (String(app.otp).trim() !== String(inputOtp).trim()) {
+      return { success: false, error: 'Invalid OTP code. Please re-check with employer.' };
+    }
+
+    setState((prev) => ({
+      ...prev,
+      applications: prev.applications.map((a) =>
+        a.id === appId
+          ? { ...a, otpVerified: true, orderStatus: 'arrived_started' }
+          : a
+      ),
+    }));
+    return { success: true };
   };
 
   const postJob = async (jobData) => {
@@ -1167,6 +1195,8 @@ export function AppProvider({ children }) {
         applyToJob,
         withdrawApplication,
         updateApplicationStatus,
+        updateBookingSchedule,
+        verifyOrderOtp,
         postJob,
         setJobStatus,
         closeJob,
