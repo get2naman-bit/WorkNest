@@ -13,6 +13,7 @@ import {
   Search,
   Filter,
   ArrowRight,
+  Navigation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -224,7 +225,19 @@ export default function MyApplicationsPage() {
                   gap: '12px',
                 }}
               >
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {app.status === 'accepted' && (
+                    <Link to={`/tracking/${app.id}`}>
+                      <Button
+                        variant="blue"
+                        size="sm"
+                        style={{ background: '#0284c7', borderColor: '#0284c7' }}
+                      >
+                        <Navigation size={13} /> Live GPS & OTP Tracking
+                      </Button>
+                    </Link>
+                  )}
+
                   <Button
                     variant="light"
                     size="sm"
