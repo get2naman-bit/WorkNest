@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Send,
+  Navigation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -354,9 +355,9 @@ export default function JobDetailsPage() {
               <div style={{ textAlign: 'center' }}>
                 <div
                   style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    color: '#1d4ed8',
+                    background: existingApp.status === 'accepted' ? '#ecfdf5' : '#eff6ff',
+                    border: `1px solid ${existingApp.status === 'accepted' ? '#a7f3d0' : '#bfdbfe'}`,
+                    color: existingApp.status === 'accepted' ? '#065f46' : '#1d4ed8',
                     padding: '14px',
                     borderRadius: '8px',
                     fontSize: '14px',
@@ -368,8 +369,17 @@ export default function JobDetailsPage() {
                     gap: '6px',
                   }}
                 >
-                  <CheckCircle2 size={16} /> Application Submitted ({existingApp.status})
+                  <CheckCircle2 size={16} /> Application {existingApp.status === 'accepted' ? 'Accepted & Hired' : `Submitted (${existingApp.status})`}
                 </div>
+
+                {existingApp.status === 'accepted' && (
+                  <Link to={`/tracking/${existingApp.id}`} style={{ marginBottom: '8px', display: 'block' }}>
+                    <Button variant="blue" size="md" style={{ width: '100%', background: '#0284c7', borderColor: '#0284c7' }}>
+                      <Navigation size={14} /> View Live GPS & OTP
+                    </Button>
+                  </Link>
+                )}
+
                 <Link to="/applications">
                   <Button variant="light" size="sm" style={{ width: '100%' }}>
                     Track in My Applications →
@@ -446,7 +456,7 @@ export default function JobDetailsPage() {
             </div>
 
             <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, marginBottom: '14px' }}>
-              Mumbai-based contractor specializing in high-quality builds and ongoing trade
+              Austin-based contractor specializing in high-quality builds and ongoing trade
               collaborations.
             </p>
 
@@ -528,7 +538,7 @@ export default function JobDetailsPage() {
               <input
                 type="tel"
                 className="form-input"
-                placeholder="+91 98200 00000"
+                placeholder="+1 (512) 000-0000"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
