@@ -13,6 +13,7 @@ import {
   ChevronDown,
   UserCheck,
   ShieldCheck,
+  Navigation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -302,6 +303,18 @@ export default function ManageApplicationsPage() {
                     >
                       <Sparkles size={12} /> Shortlist
                     </button>
+                  )}
+
+                  {app.status === 'accepted' && (
+                    <Link to={`/tracking/${app.id}`}>
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--blue"
+                        style={{ background: '#0284c7', borderColor: '#0284c7' }}
+                      >
+                        <Navigation size={12} /> Live GPS & OTP
+                      </button>
+                    </Link>
                   )}
 
                   {app.status !== 'accepted' && (
