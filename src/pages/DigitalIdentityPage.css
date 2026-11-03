@@ -1,0 +1,222 @@
+.digital-identity-page {
+  padding-bottom: 56px !important;
+}
+
+.digital-identity-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.digital-identity-print-hint {
+  margin-top: 12px;
+  color: #cbd5e1;
+  font-size: 12px;
+  text-align: right;
+}
+
+.digital-identity-profile-facts {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.digital-identity-profile-facts span {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.digital-identity-profile-facts strong {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.digital-identity-disclosure,
+.digital-identity-empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.digital-identity-disclosure {
+  margin-top: 14px;
+}
+
+.digital-identity-empty {
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.digital-identity-order {
+  break-inside: avoid;
+}
+
+.digital-identity-print-link {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .digital-identity-page {
+    padding-right: 16px !important;
+    padding-left: 16px !important;
+  }
+
+  .digital-identity-hero {
+    padding: 22px !important;
+  }
+
+  .digital-identity-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .digital-identity-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .digital-identity-print-hint {
+    text-align: left;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  html,
+  body,
+  #root,
+  .app-shell {
+    width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body {
+    color: #172033 !important;
+    font-size: 10pt !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .app-shell-bg,
+  .app-header,
+  .footer,
+  .digital-identity-actions,
+  .digital-identity-print-hint,
+  .digital-identity-print-link,
+  .toast,
+  .modal-overlay {
+    display: none !important;
+  }
+
+  .app-main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .digital-identity-page {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .digital-identity-hero {
+    margin: 0 0 10mm !important;
+    padding: 7mm !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    background: #f8fafc !important;
+    box-shadow: none !important;
+    color: #172033 !important;
+    break-inside: avoid;
+  }
+
+  .digital-identity-hero h1,
+  .digital-identity-hero p,
+  .digital-identity-hero span,
+  .digital-identity-hero strong,
+  .digital-identity-hero svg {
+    color: #172033 !important;
+  }
+
+  .digital-identity-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    margin-top: 6mm !important;
+    padding: 4mm !important;
+    border: 1px solid #dbe2ea !important;
+    background: #fff !important;
+    backdrop-filter: none !important;
+  }
+
+  .digital-identity-summary > div > span {
+    color: #596579 !important;
+  }
+
+  .digital-identity-summary strong {
+    color: #172033 !important;
+    font-size: 15pt !important;
+  }
+
+  .digital-identity-grid {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr) !important;
+    gap: 5mm !important;
+    align-items: start !important;
+  }
+
+  .digital-identity-grid > div {
+    gap: 5mm !important;
+  }
+
+  .digital-identity-section,
+  .digital-identity-order {
+    border: 1px solid #dbe2ea !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    break-inside: avoid;
+  }
+
+  .digital-identity-profile-facts,
+  .digital-identity-disclosure,
+  .digital-identity-empty,
+  .digital-identity-order,
+  .digital-identity-grid h2,
+  .digital-identity-grid h3,
+  .digital-identity-grid h4,
+  .digital-identity-grid p,
+  .digital-identity-grid span,
+  .digital-identity-grid strong {
+    color: #172033 !important;
+  }
+
+  .digital-identity-grid a[href="/history"] {
+    display: none !important;
+  }
+
+  .digital-identity-print-link {
+    display: block !important;
+    margin-top: 6mm;
+    color: #596579 !important;
+    font-size: 8pt;
+    overflow-wrap: anywhere;
+  }
+
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+}

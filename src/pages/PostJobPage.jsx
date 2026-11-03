@@ -86,8 +86,8 @@ export default function PostJobPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setError('');
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError('Please choose a JPG, PNG, or WEBP photo.');
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'].includes(file.type)) {
+      setError('Please choose a JPG, PNG, WEBP, or SVG image.');
       e.target.value = '';
       return;
     }
@@ -335,7 +335,7 @@ export default function PostJobPage() {
                     Upload Problem Photo & AI Auto-Fill
                   </strong>
                   <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                    Upload a JPG, PNG, or WEBP photo of the issue. Gemini will suggest the title, trade, scope, budget, duration, urgency, skills, and requirements.
+                    Upload a JPG, PNG, WEBP, or SVG image of the issue. Gemini will suggest the title, trade, scope, budget, duration, urgency, skills, and requirements.
                   </span>
                 </div>
               </div>
@@ -432,7 +432,7 @@ export default function PostJobPage() {
                 </span>
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
                   onChange={handleImageUpload}
                   style={{ display: 'none' }}
                 />

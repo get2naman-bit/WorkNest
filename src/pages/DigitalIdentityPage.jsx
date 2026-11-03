@@ -10,11 +10,6 @@ import {
   MapPin,
   Share2,
   Download,
-  ExternalLink,
-  QrCode,
-  Sparkles,
-  Wrench,
-  ChevronRight,
   Copy,
   Check,
 } from 'lucide-react';
@@ -22,6 +17,7 @@ import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Toast from '../components/ui/Toast.jsx';
+import './DigitalIdentityPage.css';
 
 export default function DigitalIdentityPage() {
   const { id } = useParams();
@@ -36,16 +32,42 @@ export default function DigitalIdentityPage() {
   const workerHistory = workHistory.filter((h) => h.workerId === worker?.id);
   const completedJobs = workerHistory.filter((h) => h.status === 'completed');
   const workerReviews = reviews.filter((r) => r.workerId === worker?.id);
+  const reviewCount = Math.max(workerReviews.length, Number(worker?.reviewsCount) || 0);
+  const completedJobCount = completedJobs.length;
+  const isOwnProfile = currentUser?.id === worker?.id;
+  const profileUrl = `${window.location.origin}/identity/${worker?.id || ''}`;
 
   const isWorkerProfile = worker?.role !== 'employer';
 
-  const handleCopyLink = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.href);
+  const handleCopyLink = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(profileUrl);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = profileUrl;
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        const copiedToClipboard = document.execCommand('copy');
+        input.remove();
+        if (!copiedToClipboard) throw new Error('Clipboard access is unavailable.');
+      }
       setCopied(true);
       setToastMsg('Public profile link copied to clipboard!');
       setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setToastMsg('Could not copy the link. Select and copy it from the field below.');
     }
+  };
+
+  const handleDownloadPdf = () => {
+    const previousTitle = document.title;
+    const safeName = (worker.name || 'Worker').replace(/[^\p{L}\p{N} -]/gu, '').trim();
+    document.title = `${safeName || 'Worker'} - WorkNest Digital Identity`;
+    window.addEventListener('afterprint', () => { document.title = previousTitle; }, { once: true });
+    window.print();
   };
 
   if (!worker) {
@@ -70,12 +92,12 @@ export default function DigitalIdentityPage() {
   }
 
   return (
-    <div className="container" style={{ padding: '32px 24px' }}>
+    <div className="container digital-identity-page" style={{ padding: '32px 24px' }}>
       <Toast message={toastMsg} onClose={() => setToastMsg('')} />
 
       {/* Identity Top Banner */}
       <div
-        className="card hero-banner-card"
+        className="card hero-banner-card digital-identity-hero"
         style={{
           padding: '36px',
           marginBottom: '32px',
@@ -170,7 +192,10 @@ export default function DigitalIdentityPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className="digital-identity-actions" style={{ display: 'flex', gap: '10px' }}>
+            {isOwnProfile && (
+              <Link to="/settings" className="btn btn--light btn--md">Edit profile</Link>
+            )}
             <Button
               variant="outline"
               size="md"
@@ -182,19 +207,21 @@ export default function DigitalIdentityPage() {
               variant="blue"
               size="md"
               onClick={() => {
-                window.print();
+                handleDownloadPdf();
               }}
             >
-              <Download size={15} /> Export Credential
+              <Download size={15} /> Download PDF
             </Button>
           </div>
         </div>
+
+        <p className="digital-identity-print-hint">Opens the print dialog. Choose “Save as PDF” to download a copy.</p>
 
         {/* Aggregate Credential Summary */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
             gap: '16px',
             marginTop: '32px',
             background: 'rgba(255, 255, 255, 0.08)',
@@ -205,23 +232,24 @@ export default function DigitalIdentityPage() {
             position: 'relative',
             zIndex: 2,
           }}
+          className="digital-identity-summary"
         >
           <div>
-            <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Client Rating</span>
+            <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Average rating</span>
             <strong style={{ fontSize: '22px', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Star size={18} fill="#f5a524" color="#f5a524" /> {worker?.rating ?? 'New'}
+              {reviewCount > 0 ? <><Star size={18} fill="#f5a524" color="#f5a524" /> {worker?.rating?.toFixed?.(1) ?? worker?.rating}</> : 'No ratings yet'}
             </strong>
           </div>
           <div>
-            <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Verified Reviews</span>
+            <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Client reviews</span>
             <strong style={{ fontSize: '22px', color: '#ffffff' }}>
-              {worker?.reviewsCount ?? workerReviews.length}
+              {reviewCount}
             </strong>
           </div>
           <div>
             <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Completed Jobs</span>
             <strong style={{ fontSize: '22px', color: '#ffffff' }}>
-              {worker?.jobsCompleted ?? completedJobs.length}
+              {completedJobCount}
             </strong>
           </div>
           <div>
@@ -234,52 +262,36 @@ export default function DigitalIdentityPage() {
       </div>
 
       {/* Main Grid: Verified Skills & Completed Jobs / Reviews */}
-      <div className="layout-split--identity">
+      <div className="layout-split--identity digital-identity-grid">
         {/* Left Column: Trust Badges & Verified Skills */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Trust Badges */}
-          <div className="card">
+          {/* Work profile */}
+          <div className="card digital-identity-section">
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--navy)', marginBottom: '14px' }}>
-              Verified Trust Credentials
+              Work profile
             </h3>
-            <ul style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                <CheckCircle2 size={18} color="var(--blue)" />
-                <div>
-                  <strong>Government ID Verified</strong>
-                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--muted)' }}>
-                    Identity confirmed via DigiLocker
-                  </span>
-                </div>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                <CheckCircle2 size={18} color="var(--blue)" />
-                <div>
-                  <strong>Master Trade License</strong>
-                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--muted)' }}>
-                    Licensed & code compliant since 2018
-                  </span>
-                </div>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                <CheckCircle2 size={18} color="var(--green)" />
-                <div>
-                  <strong>100% On-Time Completion</strong>
-                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--muted)' }}>
-                    Verified on WorkNest smart job tracker
-                  </span>
-                </div>
-              </li>
-            </ul>
+            {worker?.bio ? (
+              <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.65 }}>{worker.bio}</p>
+            ) : (
+              <p className="digital-identity-empty">No profile summary added yet.</p>
+            )}
+            <div className="digital-identity-profile-facts">
+              <span><strong>Completed orders</strong>{completedJobCount}</span>
+              <span><strong>Client reviews</strong>{reviewCount}</span>
+              {worker?.location && <span><strong>Based in</strong>{worker.location}</span>}
+            </div>
+            <p className="digital-identity-disclosure">
+              Skills and profile details are provided by the worker. Completed orders and ratings are recorded by WorkNest.
+            </p>
           </div>
 
           {/* Skills Breakdown */}
-          <div className="card">
+          <div className="card digital-identity-section">
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--navy)', marginBottom: '14px' }}>
               Skills & Proficiencies
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {worker?.skills?.map((skill) => (
+              {worker?.skills?.length ? worker.skills.map((skill) => (
                 <span
                   key={skill}
                   style={{
@@ -297,13 +309,13 @@ export default function DigitalIdentityPage() {
                 >
                   <CheckCircle2 size={12} color="var(--green)" /> {skill}
                 </span>
-              ))}
+              )) : <p className="digital-identity-empty">No skills listed yet.</p>}
             </div>
           </div>
 
           {/* Portable Credential Explainer */}
           <div
-            className="card"
+            className="card digital-identity-section"
             style={{
               background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
               border: '1px solid #bbf7d0',
@@ -312,21 +324,19 @@ export default function DigitalIdentityPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <ShieldCheck size={18} color="var(--green)" />
               <strong style={{ fontSize: '14px', color: '#166534' }}>
-                Permanent Portable Identity
+                Shareable work profile
               </strong>
             </div>
             <p style={{ fontSize: '12px', color: '#15803d', lineHeight: 1.5 }}>
-              Every completed job and client review adds directly to this record. It belongs to
-              you permanently and can be shared with any client, contractor, or financial
-              institution.
+              Share this profile with a prospective employer to show your skills, completed orders, and client feedback.
             </p>
           </div>
         </div>
 
-        {/* Right Column: Completed Jobs Record & Client Reviews */}
+          {/* Right Column: Completed Orders & Client Reviews */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Completed Jobs Showcase */}
-          <div className="card">
+          <div className="card digital-identity-section">
             <div
               style={{
                 display: 'flex',
@@ -337,10 +347,10 @@ export default function DigitalIdentityPage() {
             >
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)' }}>
-                  Verified Completed Jobs
+                  Completed orders
                 </h2>
                 <p style={{ fontSize: '13px', color: 'var(--muted)' }}>
-                  Proof of past projects with employer verified completion
+                  Orders marked complete by an employer
                 </p>
               </div>
               <Link
@@ -356,9 +366,10 @@ export default function DigitalIdentityPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {completedJobs.map((job) => (
+              {completedJobs.length ? completedJobs.map((job) => (
                 <div
                   key={job.id}
+                  className="digital-identity-order"
                   style={{
                     border: '1px solid rgba(226, 232, 240, 0.85)',
                     borderRadius: '12px',
@@ -390,8 +401,8 @@ export default function DigitalIdentityPage() {
                       <strong style={{ fontSize: '16px', color: 'var(--navy)' }}>
                         {job.price}
                       </strong>
-                      <span className="badge badge--green">Paid</span>
-                      <span
+                      {job.verifiedByEmployer && <span className="badge badge--green">Employer confirmed</span>}
+                      {job.rating != null && <span
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -402,7 +413,7 @@ export default function DigitalIdentityPage() {
                         }}
                       >
                         <Star size={13} fill="#f5a524" color="#f5a524" /> {job.rating}
-                      </span>
+                      </span>}
                     </div>
                   </div>
 
@@ -440,18 +451,18 @@ export default function DigitalIdentityPage() {
                     ))}
                   </div>
                 </div>
-              ))}
+              )) : <p className="digital-identity-empty">No completed orders have been recorded yet.</p>}
             </div>
           </div>
 
           {/* Client Reviews Section */}
-          <div className="card">
+          <div className="card digital-identity-section">
             <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)', marginBottom: '16px' }}>
               Client Reviews & Feedback ({workerReviews.length})
             </h2>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {workerReviews.map((rev) => (
+              {workerReviews.length ? workerReviews.map((rev) => (
                 <div
                   key={rev.id}
                   style={{
@@ -495,11 +506,13 @@ export default function DigitalIdentityPage() {
                     "{rev.comment}"
                   </p>
                 </div>
-              ))}
+              )) : <p className="digital-identity-empty">Client reviews will appear here after an order is completed and rated.</p>}
             </div>
           </div>
         </div>
       </div>
+
+      <p className="digital-identity-print-link">WorkNest profile: {profileUrl}</p>
 
       {/* Share Profile Modal */}
       <Modal
@@ -522,14 +535,14 @@ export default function DigitalIdentityPage() {
               justifyContent: 'center',
             }}
           >
-            <QrCode size={72} color="var(--navy)" />
+            <ShieldCheck size={64} color="var(--blue)" />
           </div>
 
           <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--navy)', marginBottom: '6px' }}>
-            {worker?.name}'s Public Credential
+            {worker?.name}'s Work Profile Link
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>
-            Anyone with this link can view this verified work history and client ratings.
+            Anyone with this link can view the profile, completed orders, and client reviews shown here.
           </p>
 
           <div
@@ -546,7 +559,7 @@ export default function DigitalIdentityPage() {
             <input
               type="text"
               readOnly
-              value={window.location.href}
+              value={profileUrl}
               style={{
                 flex: 1,
                 background: 'none',

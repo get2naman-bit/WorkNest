@@ -67,7 +67,16 @@ export default async function analyzeJobImage(req, res) {
       if (response.status === 400 || response.status === 403) {
         return send(res, response.status, { error: `Gemini rejected the request: ${apiMessage || 'Check that the API key is valid and Gemini API is enabled for its Google project.'}` });
       }
-      return send(res, 502, { error: 'Gemini could not analyze this photo right now. Please retry in a moment.' });
+      if (response.status === 404) {
+        return send(res, 502, { error: `Gemini model or endpoint is unavailable: ${apiMessage || 'Check the configured model name and API access.'}` });
+      }
+      if (response.status === 429) {
+        return send(res, 429, { error: `Gemini rate limit or quota reached: ${apiMessage || 'Check the API project quota and try again later.'}` });
+      }
+      if (response.status >= 500) {
+        return send(res, 502, { error: `Gemini is temporarily unavailable (HTTP ${response.status}). Please try again shortly.` });
+      }
+      return send(res, 502, { error: `Gemini request failed (HTTP ${response.status}): ${apiMessage || 'Check the API configuration and try again.'}` });
     }
 
     const output = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim();
