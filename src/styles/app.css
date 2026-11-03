@@ -742,13 +742,20 @@
   display: grid;
   grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
   height: min(720px, calc(100dvh - 180px));
+  min-height: 0;
   padding: 0;
   overflow: hidden;
+}
+
+.messages-shell > div {
+  min-height: 0;
 }
 
 .messages-shell__list {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 760px) {
@@ -765,6 +772,11 @@
 
   .messages-shell__list {
     max-height: 260px;
+  }
+
+  .messages-shell > div:nth-child(2) {
+    height: min(64dvh, 620px) !important;
+    min-height: 420px;
   }
 }
 

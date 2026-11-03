@@ -6,9 +6,6 @@ import {
   Search,
   CheckCheck,
   Briefcase,
-  Paperclip,
-  Phone,
-  MoreVertical,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -40,7 +37,8 @@ export default function MessagesPage() {
   const [isSending, setIsSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [realtimeMessages, setRealtimeMessages] = useState({});
-  const messagesEndRef = useRef(null);
+  const messagesScrollRef = useRef(null);
+  const stickToBottomRef = useRef(true);
 
   const activeConv = myConversations.find((c) => c.id === activeConvId) || null;
 
@@ -77,9 +75,25 @@ export default function MessagesPage() {
     }
   }, [activeConv?.id, activeConv?.unreadBy, currentUser?.id, markConversationRead]);
 
+  const threadMessages = activeConv
+    ? [...(activeConv.messages || []), ...(realtimeMessages[activeConv.id] || [])]
+        .filter((msg, index, all) => all.findIndex((candidate) => candidate.id === msg.id) === index)
+    : [];
+
+  // Start at the newest message when switching conversations. Keep the view
+  // there for new messages only while the reader is already near the bottom.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConv?.messages, realtimeMessages]);
+    stickToBottomRef.current = true;
+    const container = messagesScrollRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [activeConv?.id]);
+
+  useEffect(() => {
+    const container = messagesScrollRef.current;
+    if (container && stickToBottomRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [activeConv?.id, threadMessages.length]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -266,7 +280,7 @@ export default function MessagesPage() {
 
         {/* Right Pane: Active Thread */}
         {activeConv ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             {/* Thread Header with Job Context Banner */}
             <div
               style={{
@@ -300,9 +314,16 @@ export default function MessagesPage() {
 
             {/* Messages Scroll Area */}
             <div
+              ref={messagesScrollRef}
+              onScroll={(event) => {
+                const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+                stickToBottomRef.current = scrollHeight - scrollTop - clientHeight < 80;
+              }}
               style={{
                 flex: 1,
                 overflowY: 'auto',
+                minHeight: 0,
+                overscrollBehavior: 'contain',
                 padding: '24px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -310,9 +331,7 @@ export default function MessagesPage() {
                 background: '#f8fafc',
               }}
             >
-              {[...(activeConv.messages || []), ...(realtimeMessages[activeConv.id] || [])]
-                .filter((msg, index, all) => all.findIndex((candidate) => candidate.id === msg.id) === index)
-                .map((msg) => {
+              {threadMessages.map((msg) => {
                 const isMine = msg.senderId === currentUser?.id;
                 return (
                   <div
@@ -353,7 +372,6 @@ export default function MessagesPage() {
                   </div>
                 );
               })}
-              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Bar */}
