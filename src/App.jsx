@@ -199,7 +199,7 @@ export default function App() {
             path="/history"
             element={
               <AppLayout>
-                <RequireAuth role="worker">
+                <RequireAuth>
                   <WorkHistoryPage />
                 </RequireAuth>
               </AppLayout>

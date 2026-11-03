@@ -124,6 +124,14 @@ export default function AppHeader() {
                         <FileText size={15} /> Manage Applications
                       </Link>
                       <Link
+                        to="/history"
+                        className={`app-nav__link ${
+                          location.pathname === '/history' ? 'is-active' : ''
+                        }`}
+                      >
+                        <History size={15} /> Orders & Ratings
+                      </Link>
+                      <Link
                         to="/workers"
                         className={`app-nav__link ${
                           location.pathname === '/workers' ? 'is-active' : ''
