@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/analyze-job-image.js": {
+    "api/autofill-job.js": {
       "maxDuration": 30
     }
   },

@@ -5,7 +5,7 @@ function localGeminiFunction() {
   return {
     name: 'worknest-gemini-api',
     configureServer(server) {
-      server.middlewares.use('/api/analyze-job-image', async (req, res, next) => {
+      server.middlewares.use('/api/autofill-job', async (req, res, next) => {
         if (req.method !== 'POST') return next();
         const chunks = [];
         let size = 0;
@@ -14,7 +14,7 @@ function localGeminiFunction() {
           if (size > 6 * 1024 * 1024) {
             res.statusCode = 413;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: 'Photo is too large. Choose a smaller image.' }));
+            res.end(JSON.stringify({ error: 'Request is too large.' }));
             return;
           }
           chunks.push(chunk);
@@ -24,10 +24,10 @@ function localGeminiFunction() {
         } catch {
           res.statusCode = 400;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Invalid image request.' }));
+          res.end(JSON.stringify({ error: 'Invalid autofill request.' }));
           return;
         }
-        const { default: handler } = await import('./api/analyze-job-image.js');
+        const { default: handler } = await import('./api/autofill-job.js');
         await handler(req, res);
       });
     },

@@ -218,8 +218,8 @@ export function AppProvider({ children }) {
           ? mergeById(liveConvs.value, prev.conversations)
           : prev.conversations,
       notifications:
-        liveNotifs.status === 'fulfilled' && liveNotifs.value?.length
-          ? mergeById(liveNotifs.value, prev.notifications)
+        liveNotifs.status === 'fulfilled'
+          ? mergeById(liveNotifs.value, prev.notifications.filter((n) => n.userId !== userId))
           : prev.notifications,
     }));
   };
@@ -302,6 +302,33 @@ export function AppProvider({ children }) {
     conversations,
     notifications,
   } = state;
+
+  // Keep notifications in sync for the active account, including notifications
+  // created in another session or browser tab.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !currentUser?.id || !isUuid(currentUser.id)) return undefined;
+    const userId = currentUser.id;
+    const channel = supabase.channel(`notifications:${userId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}`,
+      }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setState((prev) => ({
+            ...prev,
+            notifications: prev.notifications.filter((item) => item.id !== payload.old.id),
+          }));
+          return;
+        }
+        const notification = mapNotification(payload.new);
+        if (!notification) return;
+        setState((prev) => ({
+          ...prev,
+          notifications: [notification, ...prev.notifications.filter((item) => item.id !== notification.id)],
+        }));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser?.id]);
 
   // Keep a worker's order history and public rating current across sessions.
   useEffect(() => {

@@ -10,11 +10,7 @@ import {
   AlertCircle,
   Eye,
   Check,
-  Upload,
-  Image,
-  Wand2,
   Loader2,
-  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -50,7 +46,6 @@ export default function PostJobPage() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('active');
   const [bannerImage, setBannerImage] = useState('');
-  const [imageFileName, setImageFileName] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const [requirements, setRequirements] = useState([
@@ -82,57 +77,21 @@ export default function PostJobPage() {
     }
   }, [existingJob]);
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError('');
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'].includes(file.type)) {
-      setError('Please choose a JPG, PNG, WEBP, or SVG image.');
-      e.target.value = '';
-      return;
-    }
-    if (file.size > 12 * 1024 * 1024) {
-      setError('This photo is over 12 MB. Choose a smaller image and try again.');
-      e.target.value = '';
-      return;
-    }
-
-    try {
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 1440 / Math.max(bitmap.width, bitmap.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      bitmap.close();
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      setImageFileName(file.name);
-      setBannerImage(dataUrl);
-      setToastMsg('Photo uploaded. Select “AI Auto-Fill From Photo” to analyze it.');
-    } catch {
-      setError('Could not open that image. Try a different photo.');
-    }
-  };
-
   const triggerAiAutoFill = async () => {
-    if (!bannerImage && !imageFileName) {
-      setError('Please upload an image of the problem first.');
+    if (!title.trim()) {
+      setError('Enter a short problem title first so AI can suggest the job details.');
       return;
     }
     setError('');
     setIsAnalyzing(true);
 
     try {
-      const { analyzeImageForJob } = await import('../services/geminiService.js');
-
-      const result = await analyzeImageForJob(bannerImage, imageFileName);
+      const { autofillJobFromTitle } = await import('../services/geminiService.js');
+      const result = await autofillJobFromTitle(title.trim());
 
       if (result.success && result.data) {
         const d = result.data;
-        setTitle(d.title);
         setCategory(d.category);
-        // A photo cannot reveal the street/neighborhood. Preserve the location
-        // entered by the employer instead of inventing one from image content.
         setPayType(d.payType);
         setPayRate(d.payRate);
         setDuration(d.duration);
@@ -141,7 +100,7 @@ export default function PostJobPage() {
         setSkills(d.skills);
         setRequirements(d.requirements);
 
-        setToastMsg('Gemini analyzed the photo and filled the job fields. Review the estimates before publishing.');
+        setToastMsg('AI suggested job details from your title. Review and adjust them before publishing.');
       } else {
         setError('AI analysis returned no results. Please fill in the details manually.');
       }
@@ -313,133 +272,6 @@ export default function PostJobPage() {
         )}
 
         <form onSubmit={handleSubmit}>
-          {/* Problem Image Upload & AI Auto-Fill Banner Box */}
-          <div
-            style={{
-              background: '#f8fafc',
-              border: '2px dashed #93c5fd',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '28px',
-              textAlign: 'center',
-              position: 'relative',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--sky-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)' }}>
-                  <Image size={20} />
-                </div>
-                <div>
-                  <strong style={{ fontSize: '15px', color: 'var(--navy)', display: 'block' }}>
-                    Upload Problem Photo & AI Auto-Fill
-                  </strong>
-                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                    Upload a JPG, PNG, WEBP, or SVG image of the issue. Gemini will suggest the title, trade, scope, budget, duration, urgency, skills, and requirements.
-                  </span>
-                </div>
-              </div>
-
-              {bannerImage && (
-                <button
-                  type="button"
-                  className="btn btn--sm btn--blue"
-                  onClick={triggerAiAutoFill}
-                  disabled={isAnalyzing}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 size={14} className="spin-animate" /> Analyzing with AI...
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 size={14} /> AI Auto-Fill From Photo
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {bannerImage ? (
-              <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', maxHeight: '240px', marginTop: '12px' }}>
-                <img
-                  src={bannerImage}
-                  alt="Job Problem Banner"
-                  style={{ width: '100%', height: '220px', objectFit: 'cover' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBannerImage('');
-                    setImageFileName('');
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: '10px',
-                    right: '10px',
-                    background: 'rgba(0,0,0,0.65)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '32px',
-                    height: '32px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  title="Remove image"
-                >
-                  <X size={16} />
-                </button>
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: '10px',
-                    left: '12px',
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    color: '#fff',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    fontSize: '11px',
-                  }}
-                >
-                  Active Job Card Banner &bull; {imageFileName || 'Uploaded Photo'}
-                </div>
-              </div>
-            ) : (
-              <label
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '24px 16px',
-                  cursor: 'pointer',
-                  borderRadius: '8px',
-                  background: '#ffffff',
-                  border: '1px solid var(--line)',
-                  transition: 'border-color 0.2s',
-                }}
-              >
-                <Upload size={28} color="var(--blue)" style={{ marginBottom: '8px' }} />
-                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--navy)' }}>
-                  Click or drag photo here to upload
-                </span>
-                <span style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px' }}>
-                  PNG, JPG or WEBP (serves as the listing banner & powers AI autofill)
-                </span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/svg+xml"
-                  onChange={handleImageUpload}
-                  style={{ display: 'none' }}
-                />
-              </label>
-            )}
-          </div>
-
           {/* Job Title */}
           <div className="form-group">
             <label className="form-label">
@@ -485,13 +317,24 @@ export default function PostJobPage() {
                 onChange={(e) => setLocation(e.target.value)}
               />
               <span className="form-hint">
-                Enter the real job site. Gemini cannot determine an address from the photo.
+              Enter the actual work site. AI will not guess an address.
               </span>
             </div>
           </div>
 
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-12px', marginBottom: '20px' }}>
+            <button
+              type="button"
+              className="btn btn--sm btn--blue"
+              onClick={triggerAiAutoFill}
+              disabled={isAnalyzing || !title.trim()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              {isAnalyzing ? <><Loader2 size={14} className="spin-animate" /> Filling details...</> : <><Sparkles size={14} /> Auto-fill details from title</>}
+            </button>
+          </div>
           <p className="form-hint" style={{ marginTop: '-12px', marginBottom: '20px' }}>
-            Gemini budget, duration, and urgency are suggestions based on the photo. Review them before publishing.
+            AI uses your title to suggest trade, description, pay, duration, urgency, skills, and requirements. Review every suggestion; set the real location yourself.
           </p>
 
           {/* Pay Type, Pay Rate, Duration */}

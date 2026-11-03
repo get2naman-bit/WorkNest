@@ -9,7 +9,6 @@ import {
   Briefcase,
   Check,
   ChevronRight,
-  Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
@@ -28,9 +27,8 @@ export default function NotificationsPage() {
   const navigate = useNavigate();
 
   const userNotifs = useMemo(() => {
-    return notifications.filter(
-      (n) => n.userId === currentUser?.id || (!currentUser && n.userId === 'w1')
-    );
+    if (!currentUser?.id) return [];
+    return notifications.filter((n) => n.userId === currentUser.id);
   }, [notifications, currentUser]);
 
   const filteredNotifs = useMemo(() => {
@@ -111,11 +109,13 @@ export default function NotificationsPage() {
       {filteredNotifs.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {filteredNotifs.map((notif) => (
-            <div
+            <button
               key={notif.id}
+              type="button"
               onClick={() => handleItemClick(notif)}
               style={{
                 display: 'flex',
+                width: '100%',
                 alignItems: 'center',
                 gap: '16px',
                 padding: '16px 20px',
@@ -124,6 +124,8 @@ export default function NotificationsPage() {
                 borderRadius: '10px',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
+                textAlign: 'left',
+                font: 'inherit',
               }}
             >
               <div
@@ -159,7 +161,7 @@ export default function NotificationsPage() {
               </div>
 
               <ChevronRight size={16} color="var(--muted)" />
-            </div>
+            </button>
           ))}
         </div>
       ) : (
