@@ -25,6 +25,12 @@ import { isSupabaseConfigured } from '../lib/supabase.js';
 import * as db from '../services/supabaseService.js';
 import './LiveTrackingPage.css';
 
+const generateFourDigitOtp = () => {
+  const values = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(values);
+  return String(1000 + (values[0] % 9000));
+};
+
 export default function LiveTrackingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -47,6 +53,9 @@ export default function LiveTrackingPage() {
   const [toastMsg, setToastMsg] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [employerOtp, setEmployerOtp] = useState('');
+  const [otpLoadError, setOtpLoadError] = useState('');
+  const [orderOtpVerified, setOrderOtpVerified] = useState(false);
   const [overrideWindow, setOverrideWindow] = useState(false);
 
   // Real GPS state
@@ -59,6 +68,30 @@ export default function LiveTrackingPage() {
 
   const isWorker = currentUser?.role === 'worker' || currentUser?.id === application?.workerId;
   const isEmployer = currentUser?.role === 'employer' || currentUser?.id === application?.employerId || (!currentUser?.role && !isWorker);
+
+  useEffect(() => {
+    setOrderOtpVerified(Boolean(application?.otpVerified));
+    if (!application?.id || !/^[0-9a-f-]{36}$/i.test(application.id)) return undefined;
+    return db.subscribeToApplicationOrder(application.id, (updated) => {
+      setOrderOtpVerified(Boolean(updated?.otpVerified));
+    });
+  }, [application?.id, application?.otpVerified]);
+
+  useEffect(() => {
+    if (!isEmployer || !application?.id) return undefined;
+    const isCloudOrder = isSupabaseConfigured && /^[0-9a-f-]{36}$/i.test(application.id);
+    setEmployerOtp(isCloudOrder ? '' : (application.otp || ''));
+    setOtpLoadError('');
+    if (!isCloudOrder) return undefined;
+    let active = true;
+    db.fetchApplicationOtp(application.id)
+      .then(async (otp) => {
+        const code = otp || await db.ensureApplicationOtp(application.id, generateFourDigitOtp());
+        if (active && code) setEmployerOtp(code);
+      })
+      .catch((error) => { if (active) setOtpLoadError(error.message); });
+    return () => { active = false; };
+  }, [isEmployer, application?.id, application?.otp]);
 
   // Start real GPS tracking via browser Geolocation API
   const startGpsTracking = useCallback(() => {
@@ -233,15 +266,16 @@ export default function LiveTrackingPage() {
   const employerMapPos = employerGps ? normalizeToMap(employerGps.lat, employerGps.lng, mapPoints) : null;
 
   // OTP verification handler — only worker enters OTP
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setOtpError('');
     if (!otpInput.trim()) {
       setOtpError('Please enter the 4-digit OTP provided by the employer.');
       return;
     }
-    const res = verifyOrderOtp(application.id, otpInput);
+    const res = await verifyOrderOtp(application.id, otpInput);
     if (res.success) {
+      setOrderOtpVerified(true);
       setToastMsg('OTP Verified Successfully! Worker arrival confirmed and job session started.');
     } else {
       setOtpError(res.error || 'Incorrect OTP code. Please verify with the employer on site.');
@@ -602,7 +636,7 @@ export default function LiveTrackingPage() {
                       ETA
                     </span>
                     <div className="tracking-eta-value">
-                      {application.otpVerified
+                      {orderOtpVerified
                         ? 'Arrived & Started'
                         : workerGps && employerGps
                           ? `${etaMinutes} mins`
@@ -690,7 +724,7 @@ export default function LiveTrackingPage() {
                       Service Verification OTP
                     </h3>
                   </div>
-                  {application.otpVerified && (
+                  {orderOtpVerified && (
                     <span className="tracking-otp-verified-badge">
                       <ShieldCheck size={14} /> Verified
                     </span>
@@ -710,7 +744,7 @@ export default function LiveTrackingPage() {
                       Your OTP Code (share with worker on arrival):
                     </span>
                     <div className="tracking-otp-display">
-                      {String(application.otp || '----')
+                      {String(employerOtp || '----')
                         .split('')
                         .map((digit, idx) => (
                           <div key={idx} className="tracking-otp-digit">
@@ -718,6 +752,11 @@ export default function LiveTrackingPage() {
                           </div>
                         ))}
                     </div>
+                    {otpLoadError && (
+                      <p role="alert" style={{ color: '#fca5a5', fontSize: '12px', marginTop: '8px' }}>
+                        Could not load this order OTP: {otpLoadError}
+                      </p>
+                    )}
                     <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
                       Do not share this code until the worker physically arrives at your location.
                     </p>
@@ -725,7 +764,7 @@ export default function LiveTrackingPage() {
                 )}
 
                 {/* WORKER VIEW: OTP entry form (only worker enters OTP) */}
-                {isWorker && !application.otpVerified && (
+                {isWorker && !orderOtpVerified && (
                   <form onSubmit={handleVerifyOtp} style={{ marginTop: '16px' }}>
                     <label
                       htmlFor="otpInput"
@@ -785,7 +824,7 @@ export default function LiveTrackingPage() {
                 )}
 
                 {/* Verified state */}
-                {application.otpVerified && (
+                {orderOtpVerified && (
                   <div
                     style={{
                       background: 'rgba(34, 197, 94, 0.15)',
@@ -803,7 +842,7 @@ export default function LiveTrackingPage() {
                 )}
 
                 {/* Employer waiting for worker to verify */}
-                {isEmployer && !application.otpVerified && (
+                {isEmployer && !orderOtpVerified && (
                   <div
                     style={{
                       background: 'rgba(56, 189, 248, 0.1)',
@@ -852,7 +891,7 @@ export default function LiveTrackingPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--muted)' }}>Order Status</span>
                     <strong style={{ color: 'var(--blue)' }}>
-                      {application.otpVerified ? 'In-Progress (Arrived)' : 'En Route / Live GPS'}
+                      {orderOtpVerified ? 'In-Progress (Arrived)' : 'En Route / Live GPS'}
                     </strong>
                   </div>
                 </div>

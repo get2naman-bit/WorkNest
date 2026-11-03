@@ -247,6 +247,44 @@ export async function updateApplicationStatus(appId, status) {
   return mapApplication(data);
 }
 
+export async function ensureApplicationOtp(appId, proposedOtp) {
+  if (!isSupabaseConfigured) return proposedOtp;
+  const { data, error } = await supabase.rpc('ensure_application_otp', {
+    p_application_id: appId,
+    p_otp_code: proposedOtp,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchApplicationOtp(appId) {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.from('application_otps')
+    .select('otp_code').eq('application_id', appId).maybeSingle();
+  if (error) throw error;
+  return data?.otp_code || null;
+}
+
+export async function verifyApplicationOtp(appId, otp) {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.rpc('verify_application_otp', {
+    p_application_id: appId,
+    p_otp_code: otp,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export function subscribeToApplicationOrder(appId, onUpdate) {
+  if (!isSupabaseConfigured) return () => {};
+  const channel = supabase.channel(`application-order:${appId}`).on(
+    'postgres_changes',
+    { event: 'UPDATE', schema: 'public', table: 'applications', filter: `id=eq.${appId}` },
+    (payload) => onUpdate(mapApplication(payload.new))
+  ).subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
 // ==========================================
 // SAVED JOBS (BOOKMARKS)
 // ==========================================

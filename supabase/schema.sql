@@ -2,6 +2,8 @@
 -- Run this in your Supabase Project Dashboard -> SQL Editor -> New Query -> Run
 
 create extension if not exists "uuid-ossp";
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ====================================================================
 -- 1. PROFILES TABLE (Linked with Supabase Auth users)
@@ -69,8 +71,44 @@ create table if not exists public.applications (
   cover_note text not null,
   phone text,
   status text default 'pending' check (status in ('pending', 'under-review', 'shortlisted', 'accepted', 'rejected', 'withdrawn')),
+  order_status text,
+  otp_verified_at timestamp with time zone,
   applied_at timestamp with time zone default timezone('utc'::text, now()) not null,
   unique (job_id, worker_id)
+);
+alter table public.applications add column if not exists order_status text;
+alter table public.applications add column if not exists otp_verified_at timestamp with time zone;
+
+create or replace function public.protect_application_otp_status()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_setting('worknest.otp_status_write', true) is distinct from 'on'
+      and (new.otp_verified_at is distinct from old.otp_verified_at
+        or new.order_status is distinct from old.order_status) then
+    raise exception 'OTP state can only be changed through the OTP verification function.';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists protect_application_otp_status on public.applications;
+create trigger protect_application_otp_status
+before update of otp_verified_at, order_status on public.applications
+for each row execute function public.protect_application_otp_status();
+
+-- OTP plaintext is readable only by the employer. The assigned worker verifies
+-- against the stored hash through the restricted RPC below.
+create table if not exists public.application_otps (
+  application_id uuid primary key references public.applications(id) on delete cascade,
+  otp_code text not null check (otp_code ~ '^[0-9]{4}$'),
+  otp_hash text not null,
+  salt text not null,
+  attempts integer not null default 0,
+  locked_at timestamp with time zone,
+  verified_at timestamp with time zone,
+  expires_at timestamp with time zone not null default (now() + interval '24 hours'),
+  created_at timestamp with time zone not null default now()
 );
 
 -- Live worker position, visible only to the worker and the employer on that job.
@@ -226,6 +264,7 @@ create trigger on_auth_user_created
 alter table public.profiles enable row level security;
 alter table public.jobs enable row level security;
 alter table public.applications enable row level security;
+alter table public.application_otps enable row level security;
 alter table public.live_locations enable row level security;
 alter table public.saved_jobs enable row level security;
 alter table public.work_history enable row level security;
@@ -265,6 +304,97 @@ create policy "Employers and workers can update application status" on public.ap
     select 1 from public.jobs where jobs.id = applications.job_id and jobs.employer_id = auth.uid()
   )
 );
+
+drop policy if exists "Employers can view OTP for their accepted orders" on public.application_otps;
+create policy "Employers can view OTP for their accepted orders" on public.application_otps for select using (
+  exists (
+    select 1 from public.applications a join public.jobs j on j.id = a.job_id
+    where a.id = application_otps.application_id and j.employer_id = auth.uid()
+  )
+);
+
+create or replace function public.ensure_application_otp(p_application_id uuid, p_otp_code text)
+returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_employer_id uuid;
+  v_status text;
+  v_salt text;
+  v_code text;
+begin
+  if auth.uid() is null then raise exception 'Sign in is required.'; end if;
+  if p_otp_code is null or p_otp_code !~ '^[0-9]{4}$' then raise exception 'OTP must be four digits.'; end if;
+
+  select j.employer_id, a.status into v_employer_id, v_status
+    from public.applications a join public.jobs j on j.id = a.job_id
+    where a.id = p_application_id;
+  if not found or v_employer_id is distinct from auth.uid() then
+    raise exception 'Only the employer for this order can create its OTP.';
+  end if;
+  if v_status <> 'accepted' then raise exception 'Accept the application before creating an OTP.'; end if;
+
+  v_salt := gen_random_uuid()::text;
+  insert into public.application_otps (application_id, otp_code, otp_hash, salt)
+    values (p_application_id, p_otp_code,
+      encode(digest(v_salt || p_otp_code, 'sha256'), 'hex'), v_salt)
+    on conflict (application_id) do nothing;
+  select otp_code into v_code from public.application_otps where application_id = p_application_id;
+  return v_code;
+end;
+$$;
+revoke all on function public.ensure_application_otp(uuid, text) from public;
+grant execute on function public.ensure_application_otp(uuid, text) to authenticated;
+
+create or replace function public.verify_application_otp(p_application_id uuid, p_otp_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_worker_id uuid;
+  v_status text;
+  v_otp public.application_otps%rowtype;
+  v_next_attempt integer;
+begin
+  if auth.uid() is null then return jsonb_build_object('success', false, 'error', 'Sign in as the assigned worker to verify this OTP.'); end if;
+
+  select a.worker_id, a.status into v_worker_id, v_status
+    from public.applications a where a.id = p_application_id;
+  if not found or v_worker_id is distinct from auth.uid() then
+    return jsonb_build_object('success', false, 'error', 'Only the assigned worker can verify this order OTP.');
+  end if;
+  if v_status <> 'accepted' then return jsonb_build_object('success', false, 'error', 'This order is not accepted.'); end if;
+
+  select * into v_otp from public.application_otps where application_id = p_application_id for update;
+  if not found then return jsonb_build_object('success', false, 'error', 'The employer has not set up the OTP yet.'); end if;
+  if v_otp.verified_at is not null then return jsonb_build_object('success', true, 'alreadyVerified', true); end if;
+  if v_otp.locked_at is not null or v_otp.attempts >= 5 then
+    return jsonb_build_object('success', false, 'error', 'Too many incorrect attempts. This OTP is locked; contact WorkNest support before trying again.');
+  end if;
+  if v_otp.expires_at <= now() then return jsonb_build_object('success', false, 'error', 'This OTP has expired. Ask the employer to reschedule the order.'); end if;
+
+  if p_otp_code is null or encode(digest(v_otp.salt || trim(p_otp_code), 'sha256'), 'hex') <> v_otp.otp_hash then
+    v_next_attempt := v_otp.attempts + 1;
+    update public.application_otps set attempts = v_next_attempt,
+      locked_at = case when v_next_attempt >= 5 then now() else null end
+      where application_id = p_application_id;
+    return jsonb_build_object('success', false,
+      'error', case when v_next_attempt >= 5 then 'Too many incorrect attempts. This OTP is locked; contact WorkNest support before trying again.' else 'Invalid OTP. Check with the employer and try again.' end);
+  end if;
+
+  update public.application_otps set verified_at = now() where application_id = p_application_id;
+  perform set_config('worknest.otp_status_write', 'on', true);
+  update public.applications set otp_verified_at = now(), order_status = 'arrived_started'
+    where id = p_application_id;
+  return jsonb_build_object('success', true, 'alreadyVerified', false);
+end;
+$$;
+revoke all on function public.verify_application_otp(uuid, text) from public;
+grant execute on function public.verify_application_otp(uuid, text) to authenticated;
 
 drop policy if exists "Workers can publish own live location" on public.live_locations;
 create policy "Workers can publish own live location" on public.live_locations for insert with check (

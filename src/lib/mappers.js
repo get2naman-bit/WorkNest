@@ -182,6 +182,8 @@ export function mapApplication(row) {
     jobTitle: row.job_title || '',
     payRate: row.pay_rate || '',
     status: row.status || 'pending',
+    otpVerified: Boolean(row.otp_verified_at),
+    orderStatus: row.order_status || '',
     appliedAt: row.applied_at,
     appliedDateText: formatRelativeTime(row.applied_at),
     coverNote: row.cover_note || '',

@@ -54,6 +54,14 @@ const makeId = () => {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isUuid = (value) => typeof value === 'string' && UUID_RE.test(value);
+const generateOtp = () => {
+  if (globalThis.crypto?.getRandomValues) {
+    const randomValue = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(randomValue);
+    return String(1000 + (randomValue[0] % 9000));
+  }
+  return String(1000 + Math.floor(Math.random() * 9000));
+};
 
 const makeSalt = () =>
   typeof crypto !== 'undefined' && crypto.getRandomValues
@@ -762,7 +770,7 @@ export function AppProvider({ children }) {
     if (newStatus === 'accepted' && (!app.bookingDateTime || !app.otp)) {
       // Default booking scheduled 25 minutes from now so live tracking activates within the 30-min window
       const bookingDateObj = new Date(Date.now() + 25 * 60 * 1000);
-      const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      const generatedOtp = generateOtp();
       extraFields = {
         bookingDate: bookingDateObj.toISOString().slice(0, 10),
         bookingTime: bookingDateObj.toTimeString().slice(0, 5),
@@ -773,6 +781,18 @@ export function AppProvider({ children }) {
         otpVerified: false,
         orderStatus: 'en_route',
       };
+    }
+
+    if (newStatus === 'accepted' && currentUser?.role === 'employer'
+      && isSupabaseConfigured && isUuid(appId)) {
+      const proposedOtp = extraFields.otp || app.otp || generateOtp();
+      try {
+        const storedOtp = await db.ensureApplicationOtp(appId, proposedOtp);
+        extraFields = { ...extraFields, otp: storedOtp };
+      } catch (e) {
+        console.error('Could not prepare the order OTP:', e);
+        return { success: false, error: `Application accepted, but OTP setup failed: ${e.message}` };
+      }
     }
 
     let acceptedOrder = null;
@@ -839,9 +859,30 @@ export function AppProvider({ children }) {
     }));
   };
 
-  const verifyOrderOtp = (appId, inputOtp) => {
+  const verifyOrderOtp = async (appId, inputOtp) => {
     const app = applications.find((a) => a.id === appId);
     if (!app) return { success: false, error: 'Order not found' };
+    if (currentUser?.role !== 'worker' || currentUser.id !== app.workerId) {
+      return { success: false, error: 'Only the assigned worker can enter this OTP.' };
+    }
+
+    if (isSupabaseConfigured && isUuid(appId)) {
+      try {
+        const result = await db.verifyApplicationOtp(appId, String(inputOtp).trim());
+        if (!result?.success) return result || { success: false, error: 'OTP verification failed.' };
+        setState((prev) => ({
+          ...prev,
+          applications: prev.applications.map((item) => item.id === appId
+            ? { ...item, otpVerified: true, orderStatus: 'arrived_started' }
+            : item),
+        }));
+        return result;
+      } catch (e) {
+        console.error('OTP verification failed:', e);
+        return { success: false, error: `Could not verify the OTP: ${e.message}` };
+      }
+    }
+
     if (String(app.otp).trim() !== String(inputOtp).trim()) {
       return { success: false, error: 'Invalid OTP code. Please re-check with employer.' };
     }
