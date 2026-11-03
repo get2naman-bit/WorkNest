@@ -684,6 +684,10 @@
   grid-template-columns: 1.8fr 1fr;
 }
 
+.job-details-layout--full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .layout-split--identity {
   grid-template-columns: 1fr 2fr;
 }

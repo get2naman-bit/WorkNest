@@ -61,6 +61,7 @@ export default function JobDetailsPage() {
     );
   }
 
+  const isEmployer = currentUser?.role === 'employer';
   const isSaved = savedJobIds.includes(job.id);
   const isClosed = job.status === 'closed';
 
@@ -133,7 +134,7 @@ export default function JobDetailsPage() {
         <span style={{ color: 'var(--navy)', fontWeight: 600 }}>{job.title}</span>
       </div>
 
-      <div className="layout-split--wide" style={{ marginTop: '16px' }}>
+      <div className={`layout-split--wide${isEmployer ? ' job-details-layout--full' : ''}`} style={{ marginTop: '16px' }}>
         {/* Left Column: Job Details */}
         <div>
           <div className="card" style={{ marginBottom: '24px' }}>
@@ -338,7 +339,10 @@ export default function JobDetailsPage() {
         </div>
 
         {/* Right Column: Application Card & Employer Info */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div
+          aria-hidden={isEmployer}
+          style={{ display: isEmployer ? 'none' : 'flex', flexDirection: 'column', gap: '20px' }}
+        >
           {/* Action Box */}
           <div
             className="card"
