@@ -295,6 +295,46 @@ export function AppProvider({ children }) {
     notifications,
   } = state;
 
+  // Keep a worker's order history and public rating current across sessions.
+  useEffect(() => {
+    if (!isSupabaseConfigured || currentUser?.role !== 'worker' || !isUuid(currentUser.id)) return undefined;
+    const userId = currentUser.id;
+    const channel = supabase.channel(`worker-ratings:${userId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'work_history', filter: `worker_id=eq.${userId}`,
+      }, (payload) => {
+        if (!payload.new) return;
+        const order = mapWorkHistory(payload.new);
+        setState((prev) => ({
+          ...prev,
+          workHistory: [order, ...prev.workHistory.filter((item) => item.id !== order.id)],
+        }));
+      })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'reviews', filter: `worker_id=eq.${userId}`,
+      }, (payload) => {
+        const review = mapReview(payload.new);
+        if (!review) return;
+        setState((prev) => ({
+          ...prev,
+          reviews: [review, ...prev.reviews.filter((item) => item.id !== review.id)],
+        }));
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}`,
+      }, (payload) => {
+        const updated = mapProfile(payload.new);
+        if (!updated) return;
+        setState((prev) => ({
+          ...prev,
+          currentUser: prev.currentUser?.id === userId ? { ...prev.currentUser, ...updated } : prev.currentUser,
+          users: prev.users.map((user) => user.id === userId ? { ...user, ...updated } : user),
+        }));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser?.id, currentUser?.role]);
+
   // ==========================================
   // AUTHENTICATION
   // ==========================================
@@ -694,6 +734,7 @@ export function AppProvider({ children }) {
         await db.updateApplicationStatus(appId, newStatus);
       } catch (e) {
         console.warn(e);
+        return { success: false, error: `Could not update the application: ${e.message}` };
       }
     }
 
@@ -734,13 +775,52 @@ export function AppProvider({ children }) {
       };
     }
 
+    let acceptedOrder = null;
+    let orderCreationError = '';
+    if (newStatus === 'accepted' && currentUser?.role === 'employer') {
+      const job = jobs.find((item) => item.id === app.jobId);
+      acceptedOrder = {
+        id: `history_${Date.now()}`,
+        applicationId: appId,
+        workerId: app.workerId,
+        employerId: currentUser.id,
+        employerName: currentUser.companyName || app.companyName || currentUser.name,
+        title: app.jobTitle,
+        category: job?.category || '',
+        price: app.expectedRate || app.payRate,
+        completionDate: new Date().toLocaleDateString(),
+        status: 'ongoing',
+        rating: null,
+        reviewText: null,
+        verifiedByEmployer: true,
+        skillsDemonstrated: job?.skills || [],
+        canReview: true,
+      };
+
+      if (isSupabaseConfigured && isUuid(appId) && isUuid(app.workerId) && isUuid(currentUser.id)) {
+        try {
+          const savedOrder = await db.createWorkHistory(acceptedOrder);
+          if (savedOrder) acceptedOrder = savedOrder;
+        } catch (e) {
+          console.error('Could not create the work order record:', e);
+          orderCreationError = `Application accepted, but the order record could not be created: ${e.message}`;
+        }
+      }
+    }
+
     setState((prev) => ({
       ...prev,
       applications: prev.applications.map((a) =>
         a.id === appId ? { ...a, status: newStatus, ...extraFields } : a
       ),
+      workHistory: acceptedOrder
+        ? [acceptedOrder, ...prev.workHistory.filter((item) => item.applicationId !== appId)]
+        : prev.workHistory,
       notifications: [workerNotif, ...prev.notifications],
     }));
+    return orderCreationError
+      ? { success: false, error: orderCreationError }
+      : { success: true };
   };
 
   const updateBookingSchedule = (appId, { bookingDateTime, bookingDate, bookingTime }) => {
@@ -1044,32 +1124,57 @@ export function AppProvider({ children }) {
   // REVIEWS
   // ==========================================
   const submitReview = async ({ historyId, workerId, rating, comment }) => {
+    const order = workHistory.find((item) => item.id === historyId);
+    const numericRating = Number(rating);
+    if (!order || order.status !== 'ongoing' || !order.canReview) {
+      return { success: false, error: 'This order is not open for a review.' };
+    }
+    if (currentUser?.role !== 'employer' || order.employerId !== currentUser.id) {
+      return { success: false, error: 'Only the employer who posted this order can complete and rate it.' };
+    }
+    if (order.workerId !== workerId || numericRating < 1 || numericRating > 5) {
+      return { success: false, error: 'Choose a valid rating for this worker.' };
+    }
+
     const reviewerName = currentUser?.name || 'Client';
+    let completedOrder = null;
+    let persistedRating = null;
+    let persistedReviewsCount = null;
     let newRev = {
       id: `rev_${Date.now()}`,
       workerId,
       employerId: currentUser?.id || '',
-      employerName: currentUser?.companyName
-        ? `${reviewerName} (${currentUser.companyName})`
-        : reviewerName,
-      title: 'Completed Project',
-      rating: parseFloat(rating),
+      employerName: order.employerName || reviewerName,
+      title: order.title,
+      rating: numericRating,
       date: new Date().toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
       }),
-      comment,
+      comment: comment || '',
       verified: true,
     };
 
-    if (isSupabaseConfigured && isUuid(workerId)) {
+    if (isSupabaseConfigured && isUuid(historyId)) {
       try {
-        const created = await db.createReview(newRev);
-        if (created) newRev = created;
+        const result = await db.completeWorkHistoryWithReview({ historyId, rating: numericRating, comment: comment || '' });
+        newRev = result.review;
+        completedOrder = result.history;
+        persistedRating = result.workerRating;
+        persistedReviewsCount = result.reviewsCount;
       } catch (e) {
-        console.warn('Supabase review insert error, kept locally:', e);
+        console.error('Could not complete order and save rating:', e);
+        return { success: false, error: `Could not save the rating: ${e.message}` };
       }
+    } else {
+      completedOrder = {
+        ...order,
+        status: 'completed',
+        rating: numericRating,
+        reviewText: comment || '',
+        canReview: false,
+      };
     }
 
     let reviewNotif = {
@@ -1094,29 +1199,20 @@ export function AppProvider({ children }) {
 
     setState((prev) => {
       const workerReviews = [...prev.reviews.filter((r) => r.workerId === workerId), newRev];
-      const avg = workerReviews.reduce((sum, r) => sum + r.rating, 0) / workerReviews.length;
+      const avg = persistedRating ?? (workerReviews.reduce((sum, r) => sum + r.rating, 0) / workerReviews.length);
+      const reviewCount = persistedReviewsCount ?? workerReviews.length;
 
       const updatedUsers = prev.users.map((u) =>
         u.id === workerId
           ? {
               ...u,
               rating: parseFloat(avg.toFixed(1)),
-              reviewsCount: workerReviews.length,
+              reviewsCount: reviewCount,
             }
           : u
       );
 
-      const updatedHistory = prev.workHistory.map((h) =>
-        h.id === historyId
-          ? {
-              ...h,
-              status: 'completed',
-              rating: parseFloat(rating),
-              reviewText: comment,
-              canReview: false,
-            }
-          : h
-      );
+      const updatedHistory = prev.workHistory.map((item) => item.id === historyId ? completedOrder : item);
 
       return {
         ...prev,
@@ -1129,7 +1225,7 @@ export function AppProvider({ children }) {
             ? {
                 ...prev.currentUser,
                 rating: parseFloat(avg.toFixed(1)),
-                reviewsCount: workerReviews.length,
+                reviewsCount: reviewCount,
               }
             : prev.currentUser,
       };

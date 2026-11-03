@@ -216,6 +216,7 @@ export function mapWorkHistory(row) {
   return {
     id: row.id,
     workerId: row.worker_id,
+    applicationId: row.application_id || null,
     employerId: row.employer_id,
     employerName: row.employer_name || '',
     title: row.title || '',
@@ -227,8 +228,26 @@ export function mapWorkHistory(row) {
     reviewText: row.review_text || null,
     verifiedByEmployer: Boolean(row.verified_by_employer),
     skillsDemonstrated: Array.isArray(row.skills_demonstrated) ? row.skills_demonstrated : [],
-    canReview: false,
+    canReview: row.status === 'ongoing' && row.employer_id != null,
     createdAt: row.created_at,
+  };
+}
+
+export function toWorkHistoryRow(item = {}) {
+  return {
+    application_id: item.applicationId || null,
+    worker_id: item.workerId,
+    employer_id: item.employerId,
+    employer_name: item.employerName,
+    title: item.title,
+    category: item.category || null,
+    price: item.price,
+    completion_date: item.completionDate || new Date().toLocaleDateString(),
+    status: item.status || 'ongoing',
+    rating: item.rating ?? null,
+    review_text: item.reviewText || null,
+    verified_by_employer: true,
+    skills_demonstrated: item.skillsDemonstrated || [],
   };
 }
 

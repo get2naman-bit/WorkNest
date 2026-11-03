@@ -9,7 +9,7 @@ import {
   mapNotification,
   toJobRow,
   toApplicationRow,
-  toReviewRow,
+  toWorkHistoryRow,
   toProfileRow,
 } from '../lib/mappers.js';
 
@@ -296,6 +296,39 @@ export async function fetchWorkHistory(workerId) {
   return (data || []).map(mapWorkHistory);
 }
 
+export async function createWorkHistory(item) {
+  if (!isSupabaseConfigured) return null;
+  if (item.applicationId) {
+    const { data: existing, error: lookupError } = await supabase.from('work_history')
+      .select('*').eq('application_id', item.applicationId).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (existing) return mapWorkHistory(existing);
+  }
+  const { data, error } = await supabase
+    .from('work_history')
+    .insert([toWorkHistoryRow(item)])
+    .select()
+    .single();
+  if (error) throw error;
+  return mapWorkHistory(data);
+}
+
+export async function completeWorkHistoryWithReview({ historyId, rating, comment }) {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.rpc('complete_work_history_with_review', {
+    p_history_id: historyId,
+    p_rating: rating,
+    p_comment: comment,
+  });
+  if (error) throw error;
+  return {
+    history: mapWorkHistory(data.history),
+    review: mapReview(data.review),
+    workerRating: Number(data.worker_rating),
+    reviewsCount: Number(data.reviews_count),
+  };
+}
+
 export async function fetchReviews(workerId) {
   if (!isSupabaseConfigured) return [];
   let query = supabase
@@ -308,17 +341,6 @@ export async function fetchReviews(workerId) {
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(mapReview);
-}
-
-export async function createReview(reviewData) {
-  if (!isSupabaseConfigured) return null;
-  const { data, error } = await supabase
-    .from('reviews')
-    .insert([toReviewRow(reviewData)])
-    .select()
-    .single();
-  if (error) throw error;
-  return mapReview(data);
 }
 
 // ==========================================
@@ -392,6 +414,39 @@ export function subscribeToMessages(conversationId, onNewMessage) {
   return () => {
     supabase.removeChannel(channel);
   };
+}
+
+// Share live worker coordinates with the employer through Supabase Realtime.
+export async function publishWorkerLocation(applicationId, userId, coords) {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.from('live_locations').upsert({
+    application_id: applicationId,
+    worker_id: userId,
+    latitude: coords.lat,
+    longitude: coords.lng,
+    accuracy: coords.accuracy ?? null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'application_id' });
+  if (error) throw error;
+}
+
+export async function fetchWorkerLocation(applicationId) {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.from('live_locations').select('*')
+    .eq('application_id', applicationId).maybeSingle();
+  if (error) throw error;
+  return data ? { lat: data.latitude, lng: data.longitude, accuracy: data.accuracy } : null;
+}
+
+export function subscribeToWorkerLocation(applicationId, onLocation) {
+  if (!isSupabaseConfigured) return () => {};
+  const channel = supabase.channel(`live-location:${applicationId}`).on(
+    'postgres_changes', { event: '*', schema: 'public', table: 'live_locations',
+      filter: `application_id=eq.${applicationId}` },
+    (payload) => payload.new && onLocation({ lat: payload.new.latitude,
+      lng: payload.new.longitude, accuracy: payload.new.accuracy })
+  ).subscribe();
+  return () => supabase.removeChannel(channel);
 }
 
 // ==========================================

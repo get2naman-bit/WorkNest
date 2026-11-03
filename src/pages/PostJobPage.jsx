@@ -42,7 +42,7 @@ export default function PostJobPage() {
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Plumbing');
-  const [location, setLocation] = useState('Fort, Mumbai (On-site)');
+  const [location, setLocation] = useState('');
   const [payType, setPayType] = useState('Fixed');
   const [payRate, setPayRate] = useState('₹10,000');
   const [duration, setDuration] = useState('2 days');
@@ -82,21 +82,39 @@ export default function PostJobPage() {
     }
   }, [existingJob]);
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setError('');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Please choose a JPG, PNG, or WEBP photo.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      setError('This photo is over 12 MB. Choose a smaller image and try again.');
+      e.target.value = '';
+      return;
+    }
 
-    setImageFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const dataUrl = uploadEvent.target?.result;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1440 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      setImageFileName(file.name);
       setBannerImage(dataUrl);
-      setToastMsg('Photo uploaded! Click "AI Auto-Fill From Photo" to populate details.');
-    };
-    reader.readAsDataURL(file);
+      setToastMsg('Photo uploaded. Select “AI Auto-Fill From Photo” to analyze it.');
+    } catch {
+      setError('Could not open that image. Try a different photo.');
+    }
   };
 
-  const triggerAiAutoFill = () => {
+  const triggerAiAutoFill = async () => {
     if (!bannerImage && !imageFileName) {
       setError('Please upload an image of the problem first.');
       return;
@@ -104,90 +122,35 @@ export default function PostJobPage() {
     setError('');
     setIsAnalyzing(true);
 
-    setTimeout(() => {
-      const fname = (imageFileName || '').toLowerCase();
-      // Intelligent inference based on image filename, context, or visual cues
-      if (fname.includes('leak') || fname.includes('pipe') || fname.includes('water') || fname.includes('tap') || fname.includes('plumb') || fname.includes('drain')) {
-        setTitle('Emergency Kitchen Pipe Leak & Valve Replacement');
-        setCategory('Plumbing');
-        setLocation('Fort, Mumbai (On-site)');
-        setPayType('Fixed');
-        setPayRate('₹6,500');
-        setDuration('1 day');
-        setUrgent(true);
-        setDescription('Severe leaking pipe joint detected under sink causing water accumulation. Requires pipe inspection, isolating main shut-off valve, replacing corroded copper/PEX connector with quality brass fittings, and high-pressure leak testing.');
-        setSkills(['Plumbing', 'Pipe Repair', 'Leak Detection', 'PEX Tubing']);
-        setRequirements([
-          'Licensed/experienced master plumber with leak detection gear',
-          'Carry own pipe cutters, Teflon sealant, and replacement brass fittings',
-          'Ability to begin immediately to prevent floor water damage'
-        ]);
-      } else if (fname.includes('wire') || fname.includes('switch') || fname.includes('spark') || fname.includes('electric') || fname.includes('meter') || fname.includes('light')) {
-        setTitle('Main Distribution Box Short-Circuit & Circuit Breaker Upgrade');
-        setCategory('Electrical');
-        setLocation('Churchgate, Mumbai (On-site)');
-        setPayType('Hourly');
-        setPayRate('₹750/hr');
-        setDuration('1 - 2 days');
-        setUrgent(true);
-        setDescription('Electrical panel tripping intermittently with visible scorch signs on secondary circuit breaker. Requires full load testing, cable rewiring to safety standards, and replacing worn MCBs with brand-certified trip units.');
-        setSkills(['Electrical Wiring', 'Circuit Breakers', 'Troubleshooting', 'Panel Upgrades']);
-        setRequirements([
-          'Certified residential/commercial electrician license',
-          'Carry digital multimeters, insulation tester, and certified MCBs',
-          'Adhere strictly to electrical safety clearance guidelines'
-        ]);
-      } else if (fname.includes('door') || fname.includes('wood') || fname.includes('shelf') || fname.includes('cabinet') || fname.includes('carpenter') || fname.includes('table')) {
-        setTitle('Custom Solid Teak Floating Shelving & Cabinet Hinge Restoration');
-        setCategory('Carpentry');
-        setLocation('Kala Ghoda, Mumbai (On-site)');
-        setPayType('Fixed');
-        setPayRate('₹14,000');
-        setDuration('2 - 3 days');
-        setUrgent(false);
-        setDescription('Fabrication and wall-mounting of custom solid teak floating shelves with concealed heavy-duty brackets. Includes realignment and soft-close hinge replacement for two existing overhead wall units.');
-        setSkills(['Custom Cabinetry', 'Trim & Molding', 'Framing', 'Hardwood Refinishing']);
-        setRequirements([
-          '5+ years precision finish carpentry experience',
-          'Dust containment equipment and own precision miter saw',
-          'Verified portfolio on WorkNest Digital Identity'
-        ]);
-      } else if (fname.includes('paint') || fname.includes('wall') || fname.includes('crack') || fname.includes('plaster') || fname.includes('damp')) {
-        setTitle('Water-Damaged Wall Scraping, Plaster Patching & Dual-Coat Repaint');
-        setCategory('Painting');
-        setLocation('Bandra West, Mumbai (On-site)');
-        setPayType('Fixed');
-        setPayRate('₹18,000');
-        setDuration('3 days');
-        setUrgent(false);
-        setDescription('Preparation and repainting of monsoon water-affected living room walls. Scope involves scraping flaking paint, applying waterproof polymer putty skim coat, primer, and two coats of washable luxury acrylic emulsion.');
-        setSkills(['Interior Painting', 'Drywall Repair', 'Staining', 'Plastering']);
-        setRequirements([
-          'Floor drop-cloth and masking tape protection',
-          'Complete dust-sanding and uniform color matching',
-          'Provide clean cut lines along skirting and moldings'
-        ]);
-      } else {
-        // Generic smart breakdown
-        setTitle('Trade Inspection, Diagnostic & On-Site Repair Service');
-        setCategory('Plumbing');
-        setLocation('Fort, Mumbai (On-site)');
-        setPayType('Fixed');
-        setPayRate('₹8,000');
-        setDuration('1 - 2 days');
-        setUrgent(true);
-        setDescription('Detailed problem identified in client photo. Requires expert diagnosis, necessary replacement hardware, clean trade execution, and final operational signoff.');
-        setSkills(['Troubleshooting', 'Pipe Repair', 'General Labor']);
-        setRequirements([
-          'Relevant verified trade certification and tools',
-          'Provide clear cost breakdown before installing new parts',
-          'Clean workspace upon job completion'
-        ]);
-      }
+    try {
+      const { analyzeImageForJob } = await import('../services/geminiService.js');
 
+      const result = await analyzeImageForJob(bannerImage, imageFileName);
+
+      if (result.success && result.data) {
+        const d = result.data;
+        setTitle(d.title);
+        setCategory(d.category);
+        // A photo cannot reveal the street/neighborhood. Preserve the location
+        // entered by the employer instead of inventing one from image content.
+        setPayType(d.payType);
+        setPayRate(d.payRate);
+        setDuration(d.duration);
+        setUrgent(d.urgent);
+        setDescription(d.description);
+        setSkills(d.skills);
+        setRequirements(d.requirements);
+
+        setToastMsg('Gemini analyzed the photo and filled the job fields. Review the estimates before publishing.');
+      } else {
+        setError('AI analysis returned no results. Please fill in the details manually.');
+      }
+    } catch (err) {
+      console.error('AI auto-fill error:', err);
+      setError(err.message || 'AI analysis failed. Please try again or fill in details manually.');
+    } finally {
       setIsAnalyzing(false);
-      setToastMsg('✨ AI Auto-Fill complete! Review and adjust any details before publishing.');
-    }, 1200);
+    }
   };
 
   const handleAddRequirement = () => {
@@ -372,7 +335,7 @@ export default function PostJobPage() {
                     Upload Problem Photo & AI Auto-Fill
                   </strong>
                   <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                    Upload a picture of the issue (pipe leak, wiring, damaged wall) to automatically fill details.
+                    Upload a JPG, PNG, or WEBP photo of the issue. Gemini will suggest the title, trade, scope, budget, duration, urgency, skills, and requirements.
                   </span>
                 </div>
               </div>
@@ -469,7 +432,7 @@ export default function PostJobPage() {
                 </span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleImageUpload}
                   style={{ display: 'none' }}
                 />
@@ -522,11 +485,14 @@ export default function PostJobPage() {
                 onChange={(e) => setLocation(e.target.value)}
               />
               <span className="form-hint">
-                Include a Mumbai neighbourhood (e.g. Colaba, Worli, Dadar) so the job shows on the
-                Find Jobs map.
+                Enter the real job site. Gemini cannot determine an address from the photo.
               </span>
             </div>
           </div>
+
+          <p className="form-hint" style={{ marginTop: '-12px', marginBottom: '20px' }}>
+            Gemini budget, duration, and urgency are suggestions based on the photo. Review them before publishing.
+          </p>
 
           {/* Pay Type, Pay Rate, Duration */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: '20px' }}>

@@ -53,9 +53,11 @@ export default function ManageApplicationsPage() {
     });
   }, [employerApps, selectedJobId, selectedStatus]);
 
-  const handleStatusUpdate = (appId, newStatus, candidateName) => {
-    updateApplicationStatus(appId, newStatus);
-    setToastMsg(`Updated ${candidateName}'s application to "${newStatus}".`);
+  const handleStatusUpdate = async (appId, newStatus, candidateName) => {
+    const result = await updateApplicationStatus(appId, newStatus);
+    setToastMsg(result?.success === false
+      ? result.error
+      : `Updated ${candidateName}'s application to "${newStatus}".`);
   };
 
   const handleMessage = (app) => {

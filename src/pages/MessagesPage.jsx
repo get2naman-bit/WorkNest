@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
+import { subscribeToMessages } from '../services/supabaseService.js';
+import { mapMessage } from '../lib/mappers.js';
 
 export default function MessagesPage() {
   const { conversations, currentUser, sendMessage, markConversationRead } = useApp();
@@ -35,9 +37,23 @@ export default function MessagesPage() {
 
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [realtimeMessages, setRealtimeMessages] = useState({});
   const messagesEndRef = useRef(null);
 
   const activeConv = myConversations.find((c) => c.id === activeConvId) || null;
+
+  // Subscribe to persisted messages so the other participant sees new messages
+  // without refreshing the page.
+  useEffect(() => {
+    if (!activeConv?.id || !/^[0-9a-f-]{36}$/i.test(activeConv.id)) return undefined;
+    return subscribeToMessages(activeConv.id, (row) => {
+      const message = mapMessage(row);
+      setRealtimeMessages((current) => ({
+        ...current,
+        [activeConv.id]: [...(current[activeConv.id] || []).filter((item) => item.id !== message.id), message],
+      }));
+    });
+  }, [activeConv?.id]);
 
   // Keep the selected thread valid as conversations load asynchronously.
   useEffect(() => {
@@ -61,7 +77,7 @@ export default function MessagesPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConv?.messages]);
+  }, [activeConv?.messages, realtimeMessages]);
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -280,7 +296,9 @@ export default function MessagesPage() {
                 background: '#f8fafc',
               }}
             >
-              {activeConv.messages.map((msg) => {
+              {[...(activeConv.messages || []), ...(realtimeMessages[activeConv.id] || [])]
+                .filter((msg, index, all) => all.findIndex((candidate) => candidate.id === msg.id) === index)
+                .map((msg) => {
                 const isMine = msg.senderId === currentUser?.id;
                 return (
                   <div

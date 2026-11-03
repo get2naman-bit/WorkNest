@@ -19,14 +19,15 @@ import Modal from '../components/ui/Modal.jsx';
 import Toast from '../components/ui/Toast.jsx';
 
 export default function WorkHistoryPage() {
-  const { workHistory, currentUser, submitReview } = useApp();
+  const { workHistory, currentUser, submitReview, users } = useApp();
 
   const [activeTab, setActiveTab] = useState('all'); // all | ongoing | completed
   const [reviewModalJob, setReviewModalJob] = useState(null);
-  const [rating, setRating] = useState('5.0');
+  const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
   const [toastMsg, setToastMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Workers see their own record; employers see the records of work they commissioned.
   const isEmployer = currentUser?.role === 'employer';
@@ -48,28 +49,33 @@ export default function WorkHistoryPage() {
 
   const handleOpenReview = (historyItem) => {
     setReviewModalJob(historyItem);
-    setRating('5.0');
+    setRating(5);
     setComment('');
     setError('');
   };
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
-    if (!comment.trim()) {
-      setError('Please enter a brief review comment.');
-      return;
-    }
     setError('');
-
-    await submitReview({
-      historyId: reviewModalJob.id,
-      workerId: reviewModalJob.workerId,
-      rating: parseFloat(rating),
-      comment: comment.trim(),
-    });
-
-    setReviewModalJob(null);
-    setToastMsg('Review submitted and added to Digital Work Identity!');
+    setIsSubmitting(true);
+    try {
+      const result = await submitReview({
+        historyId: reviewModalJob.id,
+        workerId: reviewModalJob.workerId,
+        rating,
+        comment: comment.trim(),
+      });
+      if (!result?.success) {
+        setError(result?.error || 'Could not save the rating. Please try again.');
+        return;
+      }
+      setReviewModalJob(null);
+      setToastMsg('Order completed. Your rating is now part of the worker’s verified profile.');
+    } catch (submitError) {
+      setError(submitError.message || 'Could not save the rating. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -277,7 +283,7 @@ export default function WorkHistoryPage() {
       >
         <form onSubmit={handleReviewSubmit}>
           <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--muted)' }}>
-            Mark project completed with <strong>{reviewModalJob?.employerName}</strong> and log client feedback into your permanent Digital Work Identity.
+            Complete this order with <strong>{users.find((user) => user.id === reviewModalJob?.workerId)?.name || 'the worker'}</strong> and add your rating to their verified work history.
           </div>
 
           {error && (
@@ -300,26 +306,30 @@ export default function WorkHistoryPage() {
             <label className="form-label">
               Rating (1 to 5 Stars) <span className="required">*</span>
             </label>
-            <select
-              className="form-select"
-              value={rating}
-              onChange={(e) => setRating(e.target.value)}
-            >
-              <option value="5.0">★★★★★ 5.0 - Exceptional Work & Punctuality</option>
-              <option value="4.8">★★★★☆ 4.8 - Very Good</option>
-              <option value="4.5">★★★★☆ 4.5 - Good</option>
-              <option value="4.0">★★★★☆ 4.0 - Satisfactory</option>
-            </select>
+            <div role="radiogroup" aria-label="Rate this worker" style={{ display: 'flex', gap: '6px' }}>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={rating === value}
+                  aria-label={`${value} ${value === 1 ? 'star' : 'stars'}`}
+                  onClick={() => setRating(value)}
+                  style={{ border: 'none', background: 'transparent', padding: '4px', cursor: 'pointer' }}
+                >
+                  <Star size={30} fill={value <= rating ? '#f5a524' : 'transparent'} color={value <= rating ? '#f5a524' : '#94a3b8'} />
+                </button>
+              ))}
+              <span style={{ alignSelf: 'center', marginLeft: '8px', fontWeight: 700 }}>{rating}/5</span>
+            </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">
-              Review Comments & Feedback <span className="required">*</span>
-            </label>
+            <label className="form-label">Review Comments & Feedback (optional)</label>
             <textarea
               className="form-textarea"
               rows={4}
-              placeholder="Detail the project outcome, quality of craftsmanship, and working experience..."
+              placeholder="Share a short note about the work quality and experience..."
               value={comment}
               onChange={(e) => setComment(e.target.value)}
             />
@@ -342,8 +352,8 @@ export default function WorkHistoryPage() {
             >
               Cancel
             </Button>
-            <Button type="submit" variant="dark" size="md">
-              Publish Review & Complete Job
+            <Button type="submit" variant="dark" size="md" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving…' : 'Complete Order & Submit Rating'}
             </Button>
           </div>
         </form>

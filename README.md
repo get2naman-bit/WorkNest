@@ -28,7 +28,10 @@ Create Account  ->  confirmation email  ->  click the link  ->  Sign In  ->  das
 
 Setup: run `supabase/schema.sql` in the Supabase SQL editor, copy
 `.env.example` to `.env` with your project URL and anon key, then restart
-`npm run dev` (Vite reads `.env` only at startup).
+`npm run dev` (Vite reads `.env` only at startup). Set `GEMINI_API_KEY` in
+`.env` for local photo analysis. For Vercel deployments, add `GEMINI_API_KEY`
+under Project Settings → Environment Variables and redeploy. Keep this key
+server-side; the image analysis endpoint is `/api/analyze-job-image`.
 
 ## Mumbai jobs map (Find Jobs page)
 

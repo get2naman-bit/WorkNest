@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   Navigation,
@@ -16,21 +16,17 @@ import {
   Info,
   Sliders,
   Sparkles,
+  Locate,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Toast from '../components/ui/Toast.jsx';
+import { isSupabaseConfigured } from '../lib/supabase.js';
+import * as db from '../services/supabaseService.js';
 import './LiveTrackingPage.css';
 
-// Mumbai geographical coordinates along route
-// Start near Dadar West (19.0178, 72.8478) to Nariman Point / Fort (18.9256, 72.8244)
-const START_LAT = 19.0178;
-const START_LNG = 72.8478;
-const END_LAT = 18.9256;
-const END_LNG = 72.8244;
-
 export default function LiveTrackingPage() {
-  const { id } = useParams(); // Can be application id or job id
+  const { id } = useParams();
   const navigate = useNavigate();
   const { applications, currentUser, verifyOrderOtp, updateBookingSchedule } = useApp();
 
@@ -51,55 +47,95 @@ export default function LiveTrackingPage() {
   const [toastMsg, setToastMsg] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [otpError, setOtpError] = useState('');
-  const [isSimulatingMove, setIsSimulatingMove] = useState(true);
-  const [progressRatio, setProgressRatio] = useState(0.45); // 0 to 1 along route
-  const [overrideWindow, setOverrideWindow] = useState(false); // Quick toggle for demo preview
-  const [liveGpsCoords, setLiveGpsCoords] = useState(null);
+  const [overrideWindow, setOverrideWindow] = useState(false);
+
+  // Real GPS state
+  const [workerGps, setWorkerGps] = useState(null);
+  const [employerGps, setEmployerGps] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [gpsError, setGpsError] = useState('');
   const [gpsActive, setGpsActive] = useState(false);
+  const [watchId, setWatchId] = useState(null);
 
-  // Attempt real device GPS position via browser Geolocation API
-  useEffect(() => {
-    if (!navigator.geolocation) return;
+  const isWorker = currentUser?.role === 'worker' || currentUser?.id === application?.workerId;
+  const isEmployer = currentUser?.role === 'employer' || currentUser?.id === application?.employerId || (!currentUser?.role && !isWorker);
 
-    const watchId = navigator.geolocation.watchPosition(
+  // Start real GPS tracking via browser Geolocation API
+  const startGpsTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGpsError('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setGpsError('');
+
+    const wid = navigator.geolocation.watchPosition(
       (pos) => {
-        setLiveGpsCoords({
+        const coords = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-        });
-        setGpsAccuracy(Math.round(pos.coords.accuracy || 8));
+          accuracy: pos.coords.accuracy,
+        };
+        setGpsAccuracy(Math.round(pos.coords.accuracy || 5));
         setGpsActive(true);
+
+        // Worker's position updates the worker GPS
+        // Employer's position is the destination
+        if (isWorker) {
+          setWorkerGps(coords);
+          if (isSupabaseConfigured && application?.id && currentUser?.id) {
+            db.publishWorkerLocation(application.id, currentUser.id, coords)
+              .catch((error) => setGpsError(`Could not share live location: ${error.message}`));
+          }
+        } else {
+          setEmployerGps(coords);
+        }
       },
       (err) => {
-        console.warn('Live device GPS unavailable or permission denied:', err.message);
+        console.warn('GPS error:', err.message);
+        setGpsError(`Location access: ${err.message}. Please enable location permissions.`);
         setGpsActive(false);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+      }
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+    setWatchId(wid);
+  }, [isWorker, application?.id, currentUser?.id]);
 
-  // Tick timer every second to keep live countdown accurate
+  // Employers receive the worker's current position through Supabase Realtime.
+  useEffect(() => {
+    if (!isEmployer || !application?.id || !isSupabaseConfigured) return undefined;
+    let active = true;
+    db.fetchWorkerLocation(application.id).then((location) => {
+      if (active && location) setWorkerGps(location);
+    }).catch((error) => setGpsError(`Could not load worker location: ${error.message}`));
+    const unsubscribe = db.subscribeToWorkerLocation(application.id, setWorkerGps);
+    return () => { active = false; unsubscribe(); };
+  }, [isEmployer, application?.id]);
+
+  // Auto-start GPS when page opens and window is active
+  useEffect(() => {
+    if (application) {
+      startGpsTracking();
+    }
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [application?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tick timer every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(Date.now());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-  // Worker GPS vehicle movement along route
-  useEffect(() => {
-    if (!isSimulatingMove || application?.otpVerified) return;
-    const interval = setInterval(() => {
-      setProgressRatio((prev) => {
-        if (prev >= 0.96) return 0.96; // Arrived
-        return prev + 0.015;
-      });
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [isSimulatingMove, application?.otpVerified]);
 
   if (!application) {
     return (
@@ -125,31 +161,90 @@ export default function LiveTrackingPage() {
   const isWithin30MinWindow = msUntilBooking <= 30 * 60 * 1000 && msUntilBooking > -180 * 60 * 1000;
   const isWindowActive = isWithin30MinWindow || overrideWindow;
 
-  // Real-time calculated worker coordinates (uses live hardware GPS if available, otherwise route interpolation)
-  const currentLat = liveGpsCoords ? liveGpsCoords.lat : START_LAT + (END_LAT - START_LAT) * progressRatio;
-  const currentLng = liveGpsCoords ? liveGpsCoords.lng : START_LNG + (END_LNG - START_LNG) * progressRatio;
+  // Calculate distance between two GPS coordinates using Haversine formula
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
 
-  // Minutes required to arrive based on remaining distance
-  const minutesRequired = Math.max(1, Math.round((1 - progressRatio) * 18));
-  const distanceRemainingKm = Math.max(0.2, ((1 - progressRatio) * 11.2)).toFixed(1);
+  // Calculate ETA based on real GPS positions
+  const currentLat = workerGps?.lat || 0;
+  const currentLng = workerGps?.lng || 0;
+  const destLat = employerGps?.lat || 0;
+  const destLng = employerGps?.lng || 0;
 
-  const isWorker = currentUser?.role === 'worker' || currentUser?.id === application.workerId;
-  const isEmployer = currentUser?.role === 'employer' || currentUser?.id === application.employerId || (!currentUser?.role && !isWorker);
+  let distanceKm = 0;
+  let etaMinutes = 0;
 
+  if (workerGps && employerGps) {
+    distanceKm = calculateDistance(currentLat, currentLng, destLat, destLng);
+    // Assume average speed of 25 km/h in urban areas
+    etaMinutes = Math.max(1, Math.round((distanceKm / 25) * 60));
+  } else if (workerGps) {
+    // If only worker GPS, show a message that we need employer location
+    distanceKm = 0;
+    etaMinutes = 0;
+  }
+
+  // SVG map positions based on real GPS (normalized to viewport)
+  const normalizeToMap = (lat, lng, allPoints) => {
+    if (allPoints.length < 2) {
+      return { x: 320, y: 190 }; // Center of viewport
+    }
+    const lats = allPoints.map((p) => p.lat);
+    const lngs = allPoints.map((p) => p.lng);
+    const minLat = Math.min(...lats) - 0.005;
+    const maxLat = Math.max(...lats) + 0.005;
+    const minLng = Math.min(...lngs) - 0.005;
+    const maxLng = Math.max(...lngs) + 0.005;
+
+    const x = 40 + ((lng - minLng) / (maxLng - minLng)) * 560;
+    const y = 340 - ((lat - minLat) / (maxLat - minLat)) * 300;
+    return { x, y };
+  };
+
+  const mapPoints = [
+    ...(workerGps ? [workerGps] : []),
+    ...(employerGps ? [employerGps] : []),
+  ];
+
+  const mapBounds = mapPoints.length
+    ? {
+        west: Math.min(...mapPoints.map((point) => point.lng)) - 0.006,
+        east: Math.max(...mapPoints.map((point) => point.lng)) + 0.006,
+        south: Math.min(...mapPoints.map((point) => point.lat)) - 0.006,
+        north: Math.max(...mapPoints.map((point) => point.lat)) + 0.006,
+      }
+    : null;
+  const mapUrl = mapBounds
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${mapBounds.west}%2C${mapBounds.south}%2C${mapBounds.east}%2C${mapBounds.north}&layer=mapnik`
+    : null;
+
+  const workerMapPos = workerGps ? normalizeToMap(workerGps.lat, workerGps.lng, mapPoints) : null;
+  const employerMapPos = employerGps ? normalizeToMap(employerGps.lat, employerGps.lng, mapPoints) : null;
+
+  // OTP verification handler — only worker enters OTP
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setOtpError('');
     if (!otpInput.trim()) {
-      setOtpError('Please enter the 4-digit OTP provided by the worker.');
+      setOtpError('Please enter the 4-digit OTP provided by the employer.');
       return;
     }
     const res = verifyOrderOtp(application.id, otpInput);
     if (res.success) {
       setToastMsg('OTP Verified Successfully! Worker arrival confirmed and job session started.');
-      setIsSimulatingMove(false);
-      setProgressRatio(1);
     } else {
-      setOtpError(res.error || 'Incorrect OTP code. Please verify with the worker on site.');
+      setOtpError(res.error || 'Incorrect OTP code. Please verify with the employer on site.');
     }
   };
 
@@ -163,11 +258,6 @@ export default function LiveTrackingPage() {
     });
     setToastMsg(`Booking time adjusted to ${offsetMinutes}m from now for preview.`);
   };
-
-  // SVG Map coordinate mapping (0% to 100%)
-  // Start point on canvas: X=120, Y=310; End point: X=520, Y=70
-  const markerX = 120 + (520 - 120) * progressRatio;
-  const markerY = 310 + (70 - 310) * progressRatio;
 
   return (
     <div className="tracking-page">
@@ -244,7 +334,7 @@ export default function LiveTrackingPage() {
           </div>
         </div>
 
-        {/* Demo / Tester toolbar so user can immediately inspect both states */}
+        {/* Demo / Tester toolbar */}
         <div
           style={{
             background: 'rgba(238, 242, 255, 0.75)',
@@ -261,7 +351,7 @@ export default function LiveTrackingPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#3730a3' }}>
             <Sliders size={16} />
-            <strong>Interactive Booking Time Controls (Test Window):</strong>
+            <strong>Booking Time Controls:</strong>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <button
@@ -269,14 +359,14 @@ export default function LiveTrackingPage() {
               className={`time-adjust-pill ${minutesUntilBooking <= 25 && minutesUntilBooking > 0 ? 'active' : ''}`}
               onClick={() => handleSetBookingOffset(20)}
             >
-              Set Booking to 20m from now (Within 30m Window)
+              Set 20m from now (Within Window)
             </button>
             <button
               type="button"
               className={`time-adjust-pill ${minutesUntilBooking > 40 ? 'active' : ''}`}
               onClick={() => handleSetBookingOffset(120)}
             >
-              Set Booking to 2 Hours from now (Outside Window)
+              Set 2 Hours (Outside Window)
             </button>
             <button
               type="button"
@@ -284,7 +374,7 @@ export default function LiveTrackingPage() {
               onClick={() => setOverrideWindow(!overrideWindow)}
               title="Force display live GPS & OTP regardless of scheduled time"
             >
-              {overrideWindow ? 'Disable Window Override' : '⚡ Preview Live Window'}
+              {overrideWindow ? 'Disable Override' : '⚡ Preview Live'}
             </button>
           </div>
         </div>
@@ -311,7 +401,7 @@ export default function LiveTrackingPage() {
               Live GPS Tracking Activates Closer to Booking Time
             </h2>
             <p style={{ maxWidth: '600px', margin: '0 auto 20px', color: 'var(--muted)', fontSize: '15px' }}>
-              For worker privacy and battery optimization, real-time GPS location coordinates, estimated minutes required, and OTP verification code unlock <strong>within 30 minutes</strong> before the scheduled appointment time.
+              For privacy and battery optimization, real-time GPS coordinates, estimated arrival time, and OTP verification unlock <strong>within 30 minutes</strong> before the scheduled appointment.
             </p>
 
             <div
@@ -350,7 +440,7 @@ export default function LiveTrackingPage() {
                 variant="blue"
                 onClick={() => setOverrideWindow(true)}
               >
-                <Sparkles size={15} /> Preview Live GPS & OTP Right Now
+                <Sparkles size={15} /> Preview Live GPS & OTP Now
               </Button>
               <Link to="/applications">
                 <Button variant="light">Return to Applications</Button>
@@ -365,16 +455,59 @@ export default function LiveTrackingPage() {
               <div className="tracking-map-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Navigation size={18} color="#38bdf8" />
-                  <span style={{ fontWeight: 700, fontSize: '15px' }}>Live Satellite Route & GPS</span>
+                  <span style={{ fontWeight: 700, fontSize: '15px' }}>Real-Time GPS Tracking</span>
                 </div>
                 <div className="tracking-live-indicator">
-                  <span className="pulse-dot" /> Live Signals Streaming
+                  <span className={`pulse-dot ${gpsActive ? '' : 'inactive'}`} />
+                  {gpsActive ? 'Live GPS Active' : 'Acquiring GPS...'}
                 </div>
               </div>
 
-              {/* Vector/Interactive Map Canvas */}
+              {/* GPS Error Banner */}
+              {gpsError && (
+                <div style={{
+                  padding: '10px 16px',
+                  background: '#fef2f2',
+                  borderBottom: '1px solid #fecaca',
+                  fontSize: '13px',
+                  color: '#991b1b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}>
+                  <AlertCircle size={14} />
+                  {gpsError}
+                  <button
+                    type="button"
+                    onClick={startGpsTracking}
+                    style={{
+                      marginLeft: 'auto',
+                      background: '#dc2626',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {/* Map Canvas */}
               <div className="tracking-map-viewport">
-                {/* SVG Map Grid & Route */}
+                {mapUrl && (
+                  <iframe
+                    className="tracking-real-map"
+                    title="Live worker and job location map"
+                    src={mapUrl}
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                )}
                 <svg className="map-svg-grid" viewBox="0 0 640 380" preserveAspectRatio="none">
                   <defs>
                     <linearGradient id="routeGradient" x1="0%" y1="100%" x2="100%" y2="0%">
@@ -385,84 +518,95 @@ export default function LiveTrackingPage() {
                       <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
                       <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
                     </radialGradient>
+                    <radialGradient id="employerGlow" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                    </radialGradient>
                   </defs>
 
-                  {/* Dark Map Street Mesh */}
-                  <rect width="640" height="380" fill="#0f172a" />
-                  {/* Subtle Grid Lines representing streets */}
-                  <g stroke="rgba(255,255,255,0.06)" strokeWidth="1">
-                    <line x1="0" y1="80" x2="640" y2="80" />
-                    <line x1="0" y1="160" x2="640" y2="160" />
-                    <line x1="0" y1="240" x2="640" y2="240" />
-                    <line x1="0" y1="320" x2="640" y2="320" />
-                    <line x1="100" y1="0" x2="100" y2="380" />
-                    <line x1="220" y1="0" x2="220" y2="380" />
-                    <line x1="340" y1="0" x2="340" y2="380" />
-                    <line x1="460" y1="0" x2="460" y2="380" />
-                    <line x1="580" y1="0" x2="580" y2="380" />
-                  </g>
+                  <rect width="640" height="380" fill="transparent" />
 
-                  {/* Curving River / Major Highway */}
-                  <path
-                    d="M 0,260 Q 180,240 300,190 T 640,110"
-                    fill="none"
-                    stroke="rgba(30, 58, 138, 0.5)"
-                    strokeWidth="14"
-                  />
-                  <path
-                    d="M 0,260 Q 180,240 300,190 T 640,110"
-                    fill="none"
-                    stroke="rgba(56, 189, 248, 0.4)"
-                    strokeWidth="2"
-                    strokeDasharray="6 4"
-                  />
+                  {/* Route Line between worker and employer */}
+                  {workerMapPos && employerMapPos && (
+                    <>
+                      <line
+                        x1={workerMapPos.x}
+                        y1={workerMapPos.y}
+                        x2={employerMapPos.x}
+                        y2={employerMapPos.y}
+                        stroke="rgba(255,255,255,0.15)"
+                        strokeWidth="8"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1={workerMapPos.x}
+                        y1={workerMapPos.y}
+                        x2={employerMapPos.x}
+                        y2={employerMapPos.y}
+                        stroke="url(#routeGradient)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeDasharray="12 6"
+                      />
+                    </>
+                  )}
 
-                  {/* Active Route Path from Start to Destination */}
-                  <path
-                    d="M 120,310 C 200,310 240,240 340,200 C 440,160 460,90 520,70"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.2)"
-                    strokeWidth="8"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M 120,310 C 200,310 240,240 340,200 C 440,160 460,90 520,70"
-                    fill="none"
-                    stroke="url(#routeGradient)"
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                  />
+                  {/* Worker GPS Marker */}
+                  {workerMapPos && (
+                    <>
+                      <circle cx={workerMapPos.x} cy={workerMapPos.y} r="28" fill="url(#workerGlow)" />
+                      <circle cx={workerMapPos.x} cy={workerMapPos.y} r="14" fill="#0284c7" stroke="#ffffff" strokeWidth="3" />
+                      <polygon
+                        points={`${workerMapPos.x},${workerMapPos.y - 5} ${workerMapPos.x - 4},${workerMapPos.y + 4} ${workerMapPos.x + 4},${workerMapPos.y + 4}`}
+                        fill="#ffffff"
+                      />
+                      <text x={workerMapPos.x} y={workerMapPos.y + 28} fill="#38bdf8" fontSize="11" textAnchor="middle" fontWeight="700">
+                        Worker
+                      </text>
+                    </>
+                  )}
 
-                  {/* Start Point Marker */}
-                  <circle cx="120" cy="310" r="8" fill="#3b82f6" stroke="#ffffff" strokeWidth="2" />
-                  <text x="120" y="334" fill="#94a3b8" fontSize="11" textAnchor="middle" fontWeight="600">
-                    Dispatch Point
-                  </text>
+                  {/* Employer / Job Location Marker */}
+                  {employerMapPos && (
+                    <>
+                      <circle cx={employerMapPos.x} cy={employerMapPos.y} r="20" fill="url(#employerGlow)" />
+                      <circle cx={employerMapPos.x} cy={employerMapPos.y} r="10" fill="#10b981" stroke="#ffffff" strokeWidth="3" />
+                      <text x={employerMapPos.x} y={employerMapPos.y - 18} fill="#4ade80" fontSize="12" textAnchor="middle" fontWeight="700">
+                        Job Location
+                      </text>
+                    </>
+                  )}
 
-                  {/* Destination Marker */}
-                  <circle cx="520" cy="70" r="10" fill="#10b981" stroke="#ffffff" strokeWidth="3" />
-                  <text x="520" y="52" fill="#4ade80" fontSize="12" textAnchor="middle" fontWeight="700">
-                    Job Location
-                  </text>
-
-                  {/* Moving Worker GPS Vehicle Marker */}
-                  <circle cx={markerX} cy={markerY} r="28" fill="url(#workerGlow)" />
-                  <circle cx={markerX} cy={markerY} r="14" fill="#0284c7" stroke="#ffffff" strokeWidth="3" />
-                  {/* Direction Arrow on vehicle */}
-                  <polygon
-                    points={`${markerX},${markerY - 5} ${markerX - 4},${markerY + 4} ${markerX + 4},${markerY + 4}`}
-                    fill="#ffffff"
-                  />
+                  {/* Single point when only one GPS is available */}
+                  {!workerMapPos && !employerMapPos && (
+                    <text x="320" y="190" fill="#64748b" fontSize="14" textAnchor="middle" fontWeight="600">
+                      Waiting for GPS signal...
+                    </text>
+                  )}
+                  {workerMapPos && !employerMapPos && (
+                    <text x="320" y="50" fill="#94a3b8" fontSize="12" textAnchor="middle">
+                      Employer location will appear when they open tracking
+                    </text>
+                  )}
+                  {!workerMapPos && employerMapPos && (
+                    <text x="320" y="50" fill="#94a3b8" fontSize="12" textAnchor="middle">
+                      Worker location will appear when they open tracking
+                    </text>
+                  )}
                 </svg>
 
-                {/* Real-Time ETA Card on Map */}
+                {/* Real-Time ETA Card */}
                 <div className="tracking-eta-overlay">
                   <div>
                     <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94a3b8', display: 'block' }}>
-                      Minutes Required
+                      ETA
                     </span>
                     <div className="tracking-eta-value">
-                      {application.otpVerified ? 'Arrived & Started' : `${minutesRequired} mins`}
+                      {application.otpVerified
+                        ? 'Arrived & Started'
+                        : workerGps && employerGps
+                          ? `${etaMinutes} mins`
+                          : 'Acquiring...'}
                     </div>
                   </div>
                   <div style={{ height: '32px', width: '1px', background: 'rgba(255,255,255,0.2)' }} />
@@ -471,27 +615,31 @@ export default function LiveTrackingPage() {
                       Distance
                     </span>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>
-                      {distanceRemainingKm} km
+                      {workerGps && employerGps ? `${distanceKm.toFixed(1)} km` : '—'}
                     </div>
                   </div>
                 </div>
 
                 {/* GPS Coordinates telemetry badge */}
                 <div className="tracking-gps-coords">
-                  GPS: {currentLat.toFixed(5)}° N, {Math.abs(currentLng).toFixed(5)}° W &bull; Accuracy &plusmn;3m
+                  {workerGps ? (
+                    <>
+                      Worker: {workerGps.lat.toFixed(5)}°N, {workerGps.lng.toFixed(5)}°E
+                      {gpsAccuracy ? ` • ±${gpsAccuracy}m` : ''}
+                    </>
+                  ) : (
+                    'Acquiring worker GPS coordinates...'
+                  )}
                 </div>
 
-                {/* Recenter / Speed up toggle */}
+                {/* Recenter GPS button */}
                 <button
                   type="button"
                   className="tracking-recenter-btn"
-                  onClick={() => {
-                    setProgressRatio(0.1);
-                    setToastMsg('Worker simulation reset to origin.');
-                  }}
-                  title="Reset worker GPS origin"
+                  onClick={startGpsTracking}
+                  title="Re-acquire GPS position"
                 >
-                  <RotateCw size={12} /> Reset Route
+                  <Locate size={12} /> Refresh GPS
                 </button>
               </div>
 
@@ -503,10 +651,12 @@ export default function LiveTrackingPage() {
                   </div>
                   <div>
                     <span style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-                      Worker Starting Location
+                      Worker Location (Live GPS)
                     </span>
                     <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
-                      {application.startAddress || 'Dadar Dispatch Hub, Mumbai'}
+                      {workerGps
+                        ? `${workerGps.lat.toFixed(4)}°N, ${workerGps.lng.toFixed(4)}°E`
+                        : 'Acquiring position...'}
                     </p>
                   </div>
                 </div>
@@ -517,10 +667,12 @@ export default function LiveTrackingPage() {
                   </div>
                   <div>
                     <span style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-                      Destination / Client Address
+                      Employer / Job Location (Live GPS)
                     </span>
                     <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
-                      {application.destinationAddress || 'Nariman Point, Mumbai (Client Job Site)'}
+                      {employerGps
+                        ? `${employerGps.lat.toFixed(4)}°N, ${employerGps.lng.toFixed(4)}°E`
+                        : 'Waiting for employer GPS...'}
                     </p>
                   </div>
                 </div>
@@ -535,7 +687,7 @@ export default function LiveTrackingPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <KeyRound size={20} color="#38bdf8" />
                     <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>
-                      Client-Verified Service OTP
+                      Service Verification OTP
                     </h3>
                   </div>
                   {application.otpVerified && (
@@ -546,19 +698,19 @@ export default function LiveTrackingPage() {
                 </div>
 
                 <p style={{ fontSize: '13px', color: '#93c5fd', marginTop: '8px', lineHeight: 1.5 }}>
-                  {isWorker
-                    ? 'Provide this secure 4-digit code to the user/client upon reaching their address to verify your arrival.'
-                    : 'Ask the worker for their 4-digit arrival code and enter it below to confirm worker arrival on site.'}
+                  {isEmployer
+                    ? 'Share this OTP with the worker when they arrive on site. They will enter it to confirm arrival.'
+                    : 'When you arrive at the job site, ask the employer for the 4-digit OTP and enter it below to confirm your arrival.'}
                 </p>
 
-                {/* Worker View: Big OTP Digits Display */}
-                {isWorker && (
+                {/* EMPLOYER VIEW: Show the OTP code (employer is given OTP) */}
+                {isEmployer && (
                   <div>
                     <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#cbd5e1', letterSpacing: '0.05em', fontWeight: 700 }}>
-                      Your Worker Arrival Code:
+                      Your OTP Code (share with worker on arrival):
                     </span>
                     <div className="tracking-otp-display">
-                      {String(application.otp || '5921')
+                      {String(application.otp || '----')
                         .split('')
                         .map((digit, idx) => (
                           <div key={idx} className="tracking-otp-digit">
@@ -566,11 +718,14 @@ export default function LiveTrackingPage() {
                           </div>
                         ))}
                     </div>
+                    <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+                      Do not share this code until the worker physically arrives at your location.
+                    </p>
                   </div>
                 )}
 
-                {/* Employer / User View: OTP Verification Form */}
-                {!application.otpVerified ? (
+                {/* WORKER VIEW: OTP entry form (only worker enters OTP) */}
+                {isWorker && !application.otpVerified && (
                   <form onSubmit={handleVerifyOtp} style={{ marginTop: '16px' }}>
                     <label
                       htmlFor="otpInput"
@@ -582,16 +737,14 @@ export default function LiveTrackingPage() {
                         marginBottom: '6px',
                       }}
                     >
-                      {isEmployer
-                        ? 'Enter Worker OTP Code to Confirm Arrival:'
-                        : 'Simulate User-Side Verification (Test):'}
+                      Enter the OTP given by the employer:
                     </label>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
                         id="otpInput"
                         type="text"
                         maxLength={4}
-                        placeholder={isWorker ? `Worker code: ${application.otp || '5921'}` : 'Enter 4-digit OTP'}
+                        placeholder="Enter 4-digit OTP"
                         value={otpInput}
                         onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                         style={{
@@ -629,7 +782,10 @@ export default function LiveTrackingPage() {
                       </p>
                     )}
                   </form>
-                ) : (
+                )}
+
+                {/* Verified state */}
+                {application.otpVerified && (
                   <div
                     style={{
                       background: 'rgba(34, 197, 94, 0.15)',
@@ -641,7 +797,25 @@ export default function LiveTrackingPage() {
                     }}
                   >
                     <p style={{ color: '#4ade80', fontSize: '13px', fontWeight: 600, margin: 0 }}>
-                      ✓ Job session officially unlocked. Work is recorded on Digital Work Identity.
+                      ✓ Worker arrival confirmed. Job session officially started and recorded on Digital Work Identity.
+                    </p>
+                  </div>
+                )}
+
+                {/* Employer waiting for worker to verify */}
+                {isEmployer && !application.otpVerified && (
+                  <div
+                    style={{
+                      background: 'rgba(56, 189, 248, 0.1)',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      textAlign: 'center',
+                      marginTop: '12px',
+                    }}
+                  >
+                    <p style={{ color: '#7dd3fc', fontSize: '13px', fontWeight: 600, margin: 0 }}>
+                      ⏳ Waiting for worker to enter the OTP upon arrival...
                     </p>
                   </div>
                 )}
@@ -671,7 +845,7 @@ export default function LiveTrackingPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--line)' }}>
                     <span style={{ color: 'var(--muted)' }}>Phone Contact</span>
                     <strong style={{ color: 'var(--navy)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Phone size={13} /> {application.phone || '+1 (512) 555-0149'}
+                      <Phone size={13} /> {application.phone || 'Not provided'}
                     </strong>
                   </div>
 
