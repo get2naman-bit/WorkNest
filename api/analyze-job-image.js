@@ -37,12 +37,15 @@ export default async function analyzeJobImage(req, res) {
   const base64 = imageData.replace(/^data:image\/(?:jpeg|png|webp);base64,/, '');
   if (!base64 || base64.length > 5_500_000) return send(res, 413, { error: 'The photo is too large. Choose a smaller image and try again.' });
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
     const response = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [{
             parts: [
@@ -59,8 +62,14 @@ export default async function analyzeJobImage(req, res) {
         }),
       }
     );
-
-    const payload = await response.json().catch(() => ({}));
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      payload = {};
+    }
+    clearTimeout(timeout);
     if (!response.ok) {
       const apiMessage = payload?.error?.message;
       console.error('Gemini image analysis request failed:', response.status, apiMessage || 'No error details returned');
@@ -89,7 +98,11 @@ export default async function analyzeJobImage(req, res) {
     parsed.requirements = Array.isArray(parsed.requirements) ? parsed.requirements.filter((item) => typeof item === 'string').slice(0, 3) : [];
     return send(res, 200, { success: true, data: parsed });
   } catch (error) {
+    clearTimeout(timeout);
     console.error('Gemini image analysis error:', error);
+    if (error.name === 'AbortError') {
+      return send(res, 504, { error: 'Gemini did not respond within 25 seconds. Please retry with a smaller photo.' });
+    }
     return send(res, 502, { error: 'Could not read Gemini’s response. Please retry with another photo.' });
   }
 }
