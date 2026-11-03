@@ -1,7 +1,9 @@
 /** Ask the server-side Gemini endpoint for editable job suggestions based on a title. */
 export async function autofillJobFromTitle(title) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 35_000);
+  // Leave a little room for the serverless function to return its own timeout
+  // response before the browser gives up on the request.
+  const timeout = setTimeout(() => controller.abort(), 58_000);
   try {
     const response = await fetch('/api/autofill-job', {
       method: 'POST',
@@ -14,7 +16,7 @@ export async function autofillJobFromTitle(title) {
     if (!result.success || !result.data) throw new Error('AI returned no job details. Please fill them manually.');
     return result;
   } catch (error) {
-    if (error.name === 'AbortError') throw new Error('AI autofill timed out after 35 seconds. Please retry or fill in details manually.');
+    if (error.name === 'AbortError') throw new Error('AI autofill timed out after 58 seconds. Please retry or fill in details manually.');
     throw error;
   } finally {
     clearTimeout(timeout);

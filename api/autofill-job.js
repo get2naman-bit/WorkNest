@@ -33,6 +33,29 @@ const groqSchema = {
   additionalProperties: false,
 };
 
+const TOTAL_TIMEOUT_MS = 55_000;
+const GEMINI_MODEL_TIMEOUT_MS = 24_000;
+const GROQ_TIMEOUT_WITH_FALLBACK_MS = 12_000;
+const GROQ_TIMEOUT_MS = 50_000;
+
+async function fetchJsonWithTimeout(url, options, requestController, deadlineAt, timeoutMs) {
+  const providerController = new AbortController();
+  const abortProvider = () => providerController.abort();
+  if (requestController.signal.aborted) abortProvider();
+  else requestController.signal.addEventListener('abort', abortProvider, { once: true });
+
+  const remainingMs = Math.max(1, deadlineAt - Date.now());
+  const timeout = setTimeout(abortProvider, Math.min(timeoutMs, remainingMs));
+  try {
+    const response = await fetch(url, { ...options, signal: providerController.signal });
+    const payload = await response.json().catch(() => ({}));
+    return { response, payload };
+  } finally {
+    clearTimeout(timeout);
+    requestController.signal.removeEventListener('abort', abortProvider);
+  }
+}
+
 function send(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -49,15 +72,15 @@ export default async function autofillJob(req, res) {
   if (!title || title.length > 180) return send(res, 400, { error: 'Enter a problem title between 1 and 180 characters.' });
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25_000);
+  const deadlineAt = Date.now() + TOTAL_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
   try {
     let output = '';
     if (groqApiKey) {
       try {
-      const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const { response: groqResponse, payload: groqPayload } = await fetchJsonWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqApiKey}` },
-        signal: controller.signal,
         body: JSON.stringify({
           model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
           messages: [
@@ -71,22 +94,19 @@ export default async function autofillJob(req, res) {
             json_schema: { name: 'job_details', strict: true, schema: groqSchema },
           },
         }),
-      });
-      const groqPayload = await groqResponse.json().catch(() => ({}));
+      }, controller, deadlineAt, geminiApiKey ? GROQ_TIMEOUT_WITH_FALLBACK_MS : GROQ_TIMEOUT_MS);
       if (groqResponse.ok) {
         output = groqPayload?.choices?.[0]?.message?.content?.trim() || '';
       } else if (geminiApiKey) {
         console.warn('Groq autofill failed; falling back to Gemini:', groqResponse.status, groqPayload?.error?.message);
       } else {
-        if (!geminiApiKey) {
-          clearTimeout(timeout);
-          return send(res, groqResponse.status === 429 ? 429 : 502, {
-            error: `Groq could not generate job details: ${groqPayload?.error?.message || `HTTP ${groqResponse.status}. Check GROQ_API_KEY and Groq model access.`}`,
-          });
-        }
+        return send(res, groqResponse.status === 429 ? 429 : 502, {
+          error: `Groq could not generate job details: ${groqPayload?.error?.message || `HTTP ${groqResponse.status}. Check GROQ_API_KEY and Groq model access.`}`,
+        });
       }
       } catch (error) {
-        if (error.name === 'AbortError' || !geminiApiKey) throw error;
+        if (error.name === 'AbortError' && (controller.signal.aborted || !geminiApiKey)) throw error;
+        if (!geminiApiKey) throw error;
         console.warn('Groq request failed; falling back to Gemini:', error.message);
       }
     }
@@ -104,14 +124,22 @@ export default async function autofillJob(req, res) {
     let response;
     let payload = {};
     let lastError;
-    for (const model of models) {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
-        signal: controller.signal,
-        body: requestBody,
-      });
-      payload = await response.json().catch(() => ({}));
+    for (let index = 0; index < models.length; index += 1) {
+      const model = models[index];
+      try {
+        const result = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
+          body: requestBody,
+        }, controller, deadlineAt, GEMINI_MODEL_TIMEOUT_MS);
+        response = result.response;
+        payload = result.payload;
+      } catch (error) {
+        if (error.name !== 'AbortError' || controller.signal.aborted || index === models.length - 1) throw error;
+        lastError = 'The Gemini model timed out; trying the fallback model.';
+        console.warn(`Gemini job autofill timed out on ${model}; trying the fallback model.`);
+        continue;
+      }
       if (response.ok) break;
 
       lastError = payload?.error?.message || `HTTP ${response.status}`;
@@ -119,7 +147,6 @@ export default async function autofillJob(req, res) {
       // Retry transient model capacity/quota errors on the configured fallback.
       if (![429, 500, 502, 503, 504].includes(response.status)) break;
     }
-    clearTimeout(timeout);
     if (!response.ok) {
       const status = response.status === 429 ? 429 : response.status >= 500 ? 502 : response.status;
       return send(res, status, { error: `Gemini could not generate job details: ${lastError || 'The AI service is temporarily unavailable. Please retry shortly.'}` });
@@ -134,10 +161,11 @@ export default async function autofillJob(req, res) {
     parsed.requirements = Array.isArray(parsed.requirements) ? parsed.requirements.filter((item) => typeof item === 'string').slice(0, 3) : [];
     return send(res, 200, { success: true, data: parsed });
   } catch (error) {
-    clearTimeout(timeout);
     console.error('Job autofill error:', error);
     return send(res, error.name === 'AbortError' ? 504 : 502, {
       error: error.name === 'AbortError' ? 'The AI provider took too long to respond. Please retry or fill in the details manually.' : 'Could not read the AI provider response. Please retry.',
     });
+  } finally {
+    clearTimeout(timeout);
   }
 }
