@@ -38,5 +38,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   // Keep the Gemini key on the server for both Vite development and Vercel.
   process.env.GEMINI_API_KEY ||= env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY;
+  process.env.GROQ_API_KEY ||= env.GROQ_API_KEY;
+  process.env.GROQ_MODEL ||= env.GROQ_MODEL;
   return { plugins: [react(), localGeminiFunction()] };
 });

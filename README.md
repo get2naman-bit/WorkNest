@@ -28,10 +28,11 @@ Create Account  ->  confirmation email  ->  click the link  ->  Sign In  ->  das
 
 Setup: run `supabase/schema.sql` in the Supabase SQL editor, copy
 `.env.example` to `.env` with your project URL and anon key, then restart
-`npm run dev` (Vite reads `.env` only at startup). Set `GEMINI_API_KEY` in
-`.env` for local photo analysis. For Vercel deployments, add `GEMINI_API_KEY`
-under Project Settings → Environment Variables and redeploy. Keep this key
-server-side; the image analysis endpoint is `/api/analyze-job-image`.
+`npm run dev` (Vite reads `.env` only at startup). Job title autofill uses
+`GROQ_API_KEY` when configured, with Gemini as a fallback. Add the keys to
+`.env` locally and restart Vite. For Vercel, add `GROQ_API_KEY` and optionally
+`GEMINI_API_KEY` under Project Settings → Environment Variables, then redeploy.
+Keep both keys server-side; the autofill endpoint is `/api/autofill-job`.
 
 ## Mumbai jobs map (Find Jobs page)
 

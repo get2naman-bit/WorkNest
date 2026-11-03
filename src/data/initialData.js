@@ -17,7 +17,7 @@ export const INITIAL_USERS = [
     bio: 'Licensed master plumber with 8+ years of residential and commercial pipefitting, leak detection, water heater replacement, and bathroom fixture installation experience. Known for clean, code-compliant, and on-time completions.',
     skills: ['Plumbing', 'Pipe Repair', 'Drain Cleaning', 'Water Heater', 'Bathroom Installation', 'Leak Detection', 'PEX Tubing', 'Copper Soldering'],
     verified: true,
-    badges: ['Identity Verified', 'Background Checked', 'Top Rated 2026', 'Master Trade Certified'],
+    badges: ['Top Rated 2026', 'Master Trade Certified'],
     profileCompletion: 92,
   },
   {
@@ -38,7 +38,7 @@ export const INITIAL_USERS = [
     bio: 'Certified master electrician specializing in panel upgrades, full rewiring, smart home lighting, EV charger installation, and code compliance inspections.',
     skills: ['Electrical Wiring', 'Circuit Breakers', 'EV Chargers', 'Smart Lighting', 'Panel Upgrades', 'Troubleshooting'],
     verified: true,
-    badges: ['Identity Verified', 'Licensed Electrician', 'EV Certified'],
+    badges: ['Licensed Electrician', 'EV Certified'],
     profileCompletion: 88,
   },
   {
@@ -59,7 +59,7 @@ export const INITIAL_USERS = [
     bio: 'Custom finish carpentry, fine cabinetry, architectural trim molding, exterior door hanging, and framing with meticulous craftsmanship and dust containment.',
     skills: ['Custom Cabinetry', 'Trim & Molding', 'Door Installation', 'Framing', 'Hardwood Refinishing'],
     verified: true,
-    badges: ['Identity Verified', 'Master Craftsman'],
+    badges: ['Master Craftsman'],
     profileCompletion: 85,
   },
   {
@@ -80,7 +80,7 @@ export const INITIAL_USERS = [
     bio: 'Interior and exterior painting, drywall patching, pressure washing, stain application, and cabinet refinishing with spray and roll mastery.',
     skills: ['Interior Painting', 'Exterior Painting', 'Drywall Repair', 'Pressure Washing', 'Staining'],
     verified: true,
-    badges: ['Identity Verified', 'Insured Pro'],
+    badges: ['Insured Pro'],
     profileCompletion: 80,
   },
   {

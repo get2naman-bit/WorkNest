@@ -50,6 +50,16 @@ export default function WorkerDashboard() {
 
   const myHistory = workHistory.filter((h) => h.workerId === currentUser?.id);
   const completedJobsCount = myHistory.filter((h) => h.status === 'completed').length;
+  const profileChecklist = [
+    { label: 'Trade or specialty added', done: Boolean(currentUser?.title?.trim()) },
+    { label: 'Work location added', done: Boolean(currentUser?.location?.trim()) },
+    { label: 'Hourly rate added', done: Boolean(currentUser?.hourlyRate?.trim()) },
+    { label: 'Professional summary added', done: Boolean(currentUser?.bio?.trim()) },
+    { label: 'At least one skill listed', done: Boolean(currentUser?.skills?.length) },
+  ];
+  const profileCompletion = Math.round(
+    (profileChecklist.filter((item) => item.done).length / profileChecklist.length) * 100
+  );
 
   // Recommended jobs based on matching skills or category
   const workerCategory = currentUser?.title?.toLowerCase().includes('plumb')
@@ -106,7 +116,7 @@ export default function WorkerDashboard() {
                 gap: '5px',
               }}
             >
-              <CheckCircle2 size={13} color="#60a5fa" /> Digital Work Identity Verified
+              <CheckCircle2 size={13} color="#60a5fa" /> Digital Work Identity Active
             </span>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>
               {currentUser?.location || 'Fort, Mumbai'} · Member since {currentUser?.memberSince}
@@ -417,7 +427,7 @@ export default function WorkerDashboard() {
           {/* Profile Completion Meter */}
           <div className="card">
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--navy)', marginBottom: '8px' }}>
-              Profile Strength: {currentUser?.profileCompletion ?? 0}%
+              Profile completeness: {profileCompletion}%
             </h3>
             <div
               style={{
@@ -431,7 +441,7 @@ export default function WorkerDashboard() {
             >
               <div
                 style={{
-                  width: `${currentUser?.profileCompletion ?? 0}%`,
+                  width: `${profileCompletion}%`,
                   height: '100%',
                   background: 'var(--blue)',
                   borderRadius: '999px',
@@ -440,18 +450,11 @@ export default function WorkerDashboard() {
             </div>
 
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--green)' }}>
-                <CheckCircle2 size={15} /> Government ID Verified
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--green)' }}>
-                <CheckCircle2 size={15} /> Master Trade License Uploaded
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--green)' }}>
-                <CheckCircle2 size={15} /> 8 Core Skills Documented
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--muted)' }}>
-                <Clock size={15} /> Add insurance liability certificate (+8%)
-              </li>
+              {profileChecklist.map((item) => (
+                <li key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: item.done ? 'var(--green)' : 'var(--muted)' }}>
+                  {item.done ? <CheckCircle2 size={15} /> : <Clock size={15} />} {item.label}
+                </li>
+              ))}
             </ul>
 
             <Link

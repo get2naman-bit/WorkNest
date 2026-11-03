@@ -116,6 +116,17 @@ export async function changePassword(currentPassword, newPassword) {
   if (error) throw error;
 }
 
+export async function changeAccountEmail(email) {
+  if (!isSupabaseConfigured) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.auth.updateUser({ email: email.trim().toLowerCase() });
+  if (error) throw error;
+  const returnedEmail = data?.user?.email?.toLowerCase();
+  return {
+    email: returnedEmail || email.trim().toLowerCase(),
+    confirmationRequired: returnedEmail !== email.trim().toLowerCase(),
+  };
+}
+
 // ==========================================
 // PROFILES
 // ==========================================
@@ -427,6 +438,15 @@ export async function sendChatMessage(messageData) {
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function updateConversationLastMessage(conversationId, text, time) {
+  if (!isSupabaseConfigured) return null;
+  const { error } = await supabase
+    .from('conversations')
+    .update({ last_message: text, last_message_time: time })
+    .eq('id', conversationId);
+  if (error) throw error;
 }
 
 // Realtime subscription for conversation messages

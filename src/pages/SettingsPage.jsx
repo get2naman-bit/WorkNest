@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, Save, Sparkles } from 'lucide-react';
+import { User, Eye, Lock, Save, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Toast from '../components/ui/Toast.jsx';
-
-const PREFS_KEY_PREFIX = 'worknest_preferences_';
+import { changeAccountEmail } from '../services/supabaseService.js';
 
 export default function SettingsPage() {
   const { currentUser, updateProfile, changePassword, isSupabaseConfigured } = useApp();
 
   const [activeTab, setActiveTab] = useState('profile'); // profile | availability | preferences | security
   const [toastMsg, setToastMsg] = useState('');
+  const [formError, setFormError] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [privacySaving, setPrivacySaving] = useState(false);
 
   // Profile fields
   const [name, setName] = useState(currentUser?.name || '');
@@ -24,9 +27,7 @@ export default function SettingsPage() {
   const [availability, setAvailability] = useState(currentUser?.availability || 'Available Now');
 
   // Preferences
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [smsAlerts, setSmsAlerts] = useState(true);
-  const [publicProfile, setPublicProfile] = useState(true);
+  const [publicProfile, setPublicProfile] = useState(currentUser?.publicProfile !== false);
 
   // Security
   const [currentPass, setCurrentPass] = useState('');
@@ -46,53 +47,65 @@ export default function SettingsPage() {
       setHourlyRate(currentUser.hourlyRate || '');
       setBio(currentUser.bio || '');
       setAvailability(currentUser.availability || 'Available Now');
+      setPublicProfile(currentUser.publicProfile !== false);
     }
   }, [currentUser]);
 
-  // Load persisted preferences for the signed-in account.
-  useEffect(() => {
-    if (!currentUser) return;
+  const savePrivacy = async () => {
+    setPrivacySaving(true);
+    setFormError('');
     try {
-      const saved = JSON.parse(
-        localStorage.getItem(`${PREFS_KEY_PREFIX}${currentUser.id}`) || 'null'
-      );
-      if (saved) {
-        setEmailAlerts(saved.emailAlerts ?? true);
-        setSmsAlerts(saved.smsAlerts ?? true);
-        setPublicProfile(saved.publicProfile ?? true);
-      }
-    } catch {
-      /* ignore malformed preferences */
-    }
-  }, [currentUser]);
-
-  const savePreferences = () => {
-    if (!currentUser) return;
-    try {
-      localStorage.setItem(
-        `${PREFS_KEY_PREFIX}${currentUser.id}`,
-        JSON.stringify({ emailAlerts, smsAlerts, publicProfile })
-      );
-      setToastMsg('Preferences successfully saved!');
-    } catch {
-      setToastMsg('Could not save preferences in this browser.');
+      await updateProfile({ publicProfile });
+      setToastMsg('Privacy settings saved.');
+    } catch (error) {
+      setFormError(error.message || 'Could not save privacy settings.');
+    } finally {
+      setPrivacySaving(false);
     }
   };
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
-    await updateProfile({
-      name,
-      email,
-      phone,
-      location,
-      title: currentUser?.role === 'worker' ? title : undefined,
-      companyName: currentUser?.role === 'employer' ? companyName : undefined,
-      hourlyRate: currentUser?.role === 'worker' ? hourlyRate : undefined,
-      bio,
-      availability,
-    });
-    setToastMsg('Profile settings successfully saved!');
+    setProfileSaving(true);
+    setFormError('');
+    try {
+      const emailChanged = email.trim().toLowerCase() !== currentUser?.email?.toLowerCase();
+      const emailResult = isSupabaseConfigured && emailChanged
+        ? await changeAccountEmail(email)
+        : null;
+      const profileUpdates = {
+        name,
+        phone,
+        location,
+        title: currentUser?.role === 'worker' ? title : undefined,
+        companyName: currentUser?.role === 'employer' ? companyName : undefined,
+        hourlyRate: currentUser?.role === 'worker' ? hourlyRate : undefined,
+        bio,
+        availability,
+        ...(!emailResult?.confirmationRequired ? { email: email.trim() } : {}),
+      };
+      await updateProfile(profileUpdates);
+      setToastMsg(emailResult?.confirmationRequired
+        ? 'Profile saved. Confirm the email change using the link sent to your inbox.'
+        : 'Profile settings saved.');
+    } catch (error) {
+      setFormError(error.message || 'Could not save profile settings.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const saveAvailability = async () => {
+    setAvailabilitySaving(true);
+    setFormError('');
+    try {
+      await updateProfile({ availability });
+      setToastMsg('Availability status updated.');
+    } catch (error) {
+      setFormError(error.message || 'Could not update availability.');
+    } finally {
+      setAvailabilitySaving(false);
+    }
   };
 
   const handlePasswordSave = async (e) => {
@@ -137,7 +150,7 @@ export default function SettingsPage() {
         <div>
           <h1 className="page-header__title">Account & Profile Settings</h1>
           <p className="page-header__subtitle">
-            Manage your personal credentials, availability schedule, and notifications preferences.
+            Update your account details, work availability, privacy, and password.
           </p>
         </div>
       </div>
@@ -163,7 +176,7 @@ export default function SettingsPage() {
           className={`btn btn--sm ${activeTab === 'preferences' ? 'btn--dark' : 'btn--light'}`}
           onClick={() => setActiveTab('preferences')}
         >
-          <Bell size={14} /> Preferences
+          <Eye size={14} /> Privacy
         </button>
         <button
           type="button"
@@ -173,6 +186,12 @@ export default function SettingsPage() {
           <Lock size={14} /> Security
         </button>
       </div>
+
+      {formError && (
+        <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', marginBottom: '20px' }}>
+          {formError}
+        </div>
+      )}
 
       {/* Profile Tab */}
       {activeTab === 'profile' && (
@@ -274,8 +293,8 @@ export default function SettingsPage() {
             </div>
 
             <div style={{ borderTop: '1px solid var(--line)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <Button type="submit" variant="dark" size="md">
-                <Save size={14} /> Save Profile Changes
+              <Button type="submit" variant="dark" size="md" disabled={profileSaving}>
+                {profileSaving ? 'Saving…' : <><Save size={14} /> Save Profile Changes</>}
               </Button>
             </div>
           </form>
@@ -336,64 +355,30 @@ export default function SettingsPage() {
               type="button"
               variant="dark"
               size="md"
-              onClick={() => {
-                updateProfile({ availability });
-                setToastMsg('Availability status updated!');
-              }}
+              onClick={saveAvailability}
+              disabled={availabilitySaving}
             >
-              <Save size={14} /> Update Availability
+              {availabilitySaving ? 'Saving…' : <><Save size={14} /> Update Availability</>}
             </Button>
           </div>
         </div>
       )}
 
-      {/* Preferences Tab */}
+      {/* Privacy Tab */}
       {activeTab === 'preferences' && (
         <div className="card" style={{ padding: '32px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)', marginBottom: '20px' }}>
-            Communication & Privacy Preferences
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--navy)', marginBottom: '8px' }}>
+            Public Digital Identity
           </h2>
+          <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, marginBottom: '20px' }}>
+            Control whether other people can open your shareable Digital Identity page. Your private profile settings remain available to you.
+          </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '16px', background: '#f8fafc', border: '1px solid var(--line)', borderRadius: '10px', marginBottom: '24px' }}>
               <div>
-                <strong style={{ fontSize: '14px', color: 'var(--navy)' }}>Email Notifications</strong>
+                <strong style={{ fontSize: '14px', color: 'var(--navy)' }}>Allow public access to my identity</strong>
                 <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)' }}>
-                  Receive email alerts for shortlisted applications and new messages
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={emailAlerts}
-                onChange={(e) => setEmailAlerts(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--blue)' }}
-              />
-            </label>
-
-            <div style={{ height: '1px', background: 'var(--line)' }} />
-
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <strong style={{ fontSize: '14px', color: 'var(--navy)' }}>SMS Urgent Dispatch Alerts</strong>
-                <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)' }}>
-                  Get instant text notifications for same-day emergency repair requests
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={smsAlerts}
-                onChange={(e) => setSmsAlerts(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--blue)' }}
-              />
-            </label>
-
-            <div style={{ height: '1px', background: 'var(--line)' }} />
-
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <strong style={{ fontSize: '14px', color: 'var(--navy)' }}>Public Work Identity Visibility</strong>
-                <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)' }}>
-                  Allow external contractors to view verified ratings via shared URL
+                  When turned off, only you can view this page while signed in.
                 </span>
               </div>
               <input
@@ -402,17 +387,17 @@ export default function SettingsPage() {
                 onChange={(e) => setPublicProfile(e.target.checked)}
                 style={{ width: '18px', height: '18px', accentColor: 'var(--blue)' }}
               />
-            </label>
-          </div>
+          </label>
 
           <div style={{ borderTop: '1px solid var(--line)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               type="button"
               variant="dark"
               size="md"
-              onClick={savePreferences}
+              onClick={savePrivacy}
+              disabled={privacySaving}
             >
-              <Save size={14} /> Save Preferences
+              {privacySaving ? 'Saving…' : <><Save size={14} /> Save Privacy Settings</>}
             </Button>
           </div>
         </div>

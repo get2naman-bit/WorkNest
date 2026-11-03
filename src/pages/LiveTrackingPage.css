@@ -78,23 +78,136 @@
   user-select: none;
 }
 
-.tracking-real-map {
+.tracking-map-canvas {
   position: absolute;
   inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
+  overflow: hidden;
+  background: #dbeafe;
   z-index: 0;
 }
 
-.map-svg-grid {
+.tracking-map-tiles,
+.tracking-map-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tracking-map-route {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   z-index: 1;
   pointer-events: none;
+}
+
+.tracking-map-tiles img {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  max-width: none;
+  user-select: none;
+}
+
+.tracking-map-markers { z-index: 2; }
+.tracking-map-marker {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+}
+.tracking-map-marker__pin {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.6), 0 0 0 7px rgba(2, 132, 199, 0.28);
+  background: #0284c7;
+}
+.tracking-map-marker--employer .tracking-map-marker__pin {
+  width: 18px;
+  height: 18px;
+  inset: 2px;
+  background: #10b981;
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.6), 0 0 0 7px rgba(16, 185, 129, 0.25);
+}
+.tracking-map-marker__label {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 5px;
+  padding: 3px 7px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.88);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+}
+.tracking-map-marker--worker .tracking-map-marker__label { color: #bae6fd; }
+.tracking-map-marker--employer .tracking-map-marker__label { color: #a7f3d0; }
+
+.tracking-map-zoom {
+  position: absolute;
+  z-index: 12;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+}
+.tracking-map-zoom button {
+  width: 38px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: #1e293b;
+  background: #fff;
+  border: 0;
+}
+.tracking-map-zoom button + button { border-top: 1px solid #e2e8f0; }
+.tracking-map-zoom button:hover { background: #f1f5f9; }
+.tracking-map-attribution {
+  position: absolute;
+  z-index: 11;
+  right: 6px;
+  bottom: 4px;
+  padding: 2px 5px;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  text-decoration: none;
+}
+.tracking-map-waiting {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 12px;
+  border-radius: 7px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.8);
+  font-size: 13px;
+}
+.tracking-map-single-status {
+  position: absolute;
+  z-index: 4;
+  top: 78px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.75);
+  font-size: 12px;
+  text-align: center;
 }
 
 .tracking-eta-overlay {

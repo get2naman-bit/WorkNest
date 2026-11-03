@@ -21,6 +21,7 @@ import {
 import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Toast from '../components/ui/Toast.jsx';
+import TrackingMap from '../components/ui/TrackingMap.jsx';
 import { isSupabaseConfigured } from '../lib/supabase.js';
 import * as db from '../services/supabaseService.js';
 import './LiveTrackingPage.css';
@@ -227,43 +228,6 @@ export default function LiveTrackingPage() {
     distanceKm = 0;
     etaMinutes = 0;
   }
-
-  // SVG map positions based on real GPS (normalized to viewport)
-  const normalizeToMap = (lat, lng, allPoints) => {
-    if (allPoints.length < 2) {
-      return { x: 320, y: 190 }; // Center of viewport
-    }
-    const lats = allPoints.map((p) => p.lat);
-    const lngs = allPoints.map((p) => p.lng);
-    const minLat = Math.min(...lats) - 0.005;
-    const maxLat = Math.max(...lats) + 0.005;
-    const minLng = Math.min(...lngs) - 0.005;
-    const maxLng = Math.max(...lngs) + 0.005;
-
-    const x = 40 + ((lng - minLng) / (maxLng - minLng)) * 560;
-    const y = 340 - ((lat - minLat) / (maxLat - minLat)) * 300;
-    return { x, y };
-  };
-
-  const mapPoints = [
-    ...(workerGps ? [workerGps] : []),
-    ...(employerGps ? [employerGps] : []),
-  ];
-
-  const mapBounds = mapPoints.length
-    ? {
-        west: Math.min(...mapPoints.map((point) => point.lng)) - 0.006,
-        east: Math.max(...mapPoints.map((point) => point.lng)) + 0.006,
-        south: Math.min(...mapPoints.map((point) => point.lat)) - 0.006,
-        north: Math.max(...mapPoints.map((point) => point.lat)) + 0.006,
-      }
-    : null;
-  const mapUrl = mapBounds
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${mapBounds.west}%2C${mapBounds.south}%2C${mapBounds.east}%2C${mapBounds.north}&layer=mapnik`
-    : null;
-
-  const workerMapPos = workerGps ? normalizeToMap(workerGps.lat, workerGps.lng, mapPoints) : null;
-  const employerMapPos = employerGps ? normalizeToMap(employerGps.lat, employerGps.lng, mapPoints) : null;
 
   // OTP verification handler — only worker enters OTP
   const handleVerifyOtp = async (e) => {
@@ -533,101 +497,7 @@ export default function LiveTrackingPage() {
 
               {/* Map Canvas */}
               <div className="tracking-map-viewport">
-                {mapUrl && (
-                  <iframe
-                    className="tracking-real-map"
-                    title="Live worker and job location map"
-                    src={mapUrl}
-                    loading="lazy"
-                    referrerPolicy="strict-origin-when-cross-origin"
-                  />
-                )}
-                <svg className="map-svg-grid" viewBox="0 0 640 380" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="routeGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#10b981" />
-                    </linearGradient>
-                    <radialGradient id="workerGlow" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
-                      <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
-                    </radialGradient>
-                    <radialGradient id="employerGlow" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                    </radialGradient>
-                  </defs>
-
-                  <rect width="640" height="380" fill="transparent" />
-
-                  {/* Route Line between worker and employer */}
-                  {workerMapPos && employerMapPos && (
-                    <>
-                      <line
-                        x1={workerMapPos.x}
-                        y1={workerMapPos.y}
-                        x2={employerMapPos.x}
-                        y2={employerMapPos.y}
-                        stroke="rgba(255,255,255,0.15)"
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                      />
-                      <line
-                        x1={workerMapPos.x}
-                        y1={workerMapPos.y}
-                        x2={employerMapPos.x}
-                        y2={employerMapPos.y}
-                        stroke="url(#routeGradient)"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeDasharray="12 6"
-                      />
-                    </>
-                  )}
-
-                  {/* Worker GPS Marker */}
-                  {workerMapPos && (
-                    <>
-                      <circle cx={workerMapPos.x} cy={workerMapPos.y} r="28" fill="url(#workerGlow)" />
-                      <circle cx={workerMapPos.x} cy={workerMapPos.y} r="14" fill="#0284c7" stroke="#ffffff" strokeWidth="3" />
-                      <polygon
-                        points={`${workerMapPos.x},${workerMapPos.y - 5} ${workerMapPos.x - 4},${workerMapPos.y + 4} ${workerMapPos.x + 4},${workerMapPos.y + 4}`}
-                        fill="#ffffff"
-                      />
-                      <text x={workerMapPos.x} y={workerMapPos.y + 28} fill="#38bdf8" fontSize="11" textAnchor="middle" fontWeight="700">
-                        Worker
-                      </text>
-                    </>
-                  )}
-
-                  {/* Employer / Job Location Marker */}
-                  {employerMapPos && (
-                    <>
-                      <circle cx={employerMapPos.x} cy={employerMapPos.y} r="20" fill="url(#employerGlow)" />
-                      <circle cx={employerMapPos.x} cy={employerMapPos.y} r="10" fill="#10b981" stroke="#ffffff" strokeWidth="3" />
-                      <text x={employerMapPos.x} y={employerMapPos.y - 18} fill="#4ade80" fontSize="12" textAnchor="middle" fontWeight="700">
-                        Job Location
-                      </text>
-                    </>
-                  )}
-
-                  {/* Single point when only one GPS is available */}
-                  {!workerMapPos && !employerMapPos && (
-                    <text x="320" y="190" fill="#64748b" fontSize="14" textAnchor="middle" fontWeight="600">
-                      Waiting for GPS signal...
-                    </text>
-                  )}
-                  {workerMapPos && !employerMapPos && (
-                    <text x="320" y="50" fill="#94a3b8" fontSize="12" textAnchor="middle">
-                      Employer location will appear when they open tracking
-                    </text>
-                  )}
-                  {!workerMapPos && employerMapPos && (
-                    <text x="320" y="50" fill="#94a3b8" fontSize="12" textAnchor="middle">
-                      Worker location will appear when they open tracking
-                    </text>
-                  )}
-                </svg>
+                <TrackingMap workerGps={workerGps} employerGps={employerGps} />
 
                 {/* Real-Time ETA Card */}
                 <div className="tracking-eta-overlay">

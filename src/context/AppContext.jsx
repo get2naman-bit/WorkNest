@@ -7,6 +7,7 @@ import {
   mapApplication,
   mapConversation,
   mapJob,
+  mapMessage,
   mapNotification,
   mapProfile,
   mapReview,
@@ -119,8 +120,9 @@ function buildUserRecord({ id, role, name, email, ...rest }) {
     companyName: '',
     title: '',
     bio: '',
-    hourlyRate: '$45/hr',
+    hourlyRate: '₹550/hr',
     availability: 'Available Now',
+    publicProfile: true,
     rating: 5,
     reviewsCount: 0,
     jobsCompleted: 0,
@@ -184,7 +186,7 @@ export function AppProvider({ children }) {
         liveJobs.status === 'fulfilled' ? mergeById(liveJobs.value, prev.jobs) : prev.jobs,
       users:
         liveProfiles.status === 'fulfilled'
-          ? mergeById(liveProfiles.value, prev.users)
+          ? [...liveProfiles.value, ...prev.users.filter((user) => !isUuid(user.id))]
           : prev.users,
       applications:
         liveApps.status === 'fulfilled' ? mergeById(liveApps.value, prev.applications) : prev.applications,
@@ -246,6 +248,13 @@ export function AppProvider({ children }) {
           } catch (e) {
             console.warn('Profile fetch failed, using auth metadata:', e);
           }
+          if (profile && session.user.email && profile.email !== session.user.email) {
+            try {
+              profile = await db.updateProfile(session.user.id, { email: session.user.email });
+            } catch (e) {
+              console.warn('Could not sync the confirmed account email to its profile:', e);
+            }
+          }
           if (profile) {
             setState((prev) => ({ ...prev, currentUser: profile }));
           }
@@ -273,7 +282,14 @@ export function AppProvider({ children }) {
       }
 
       try {
-        const profile = await db.fetchProfile(session.user.id);
+        let profile = await db.fetchProfile(session.user.id);
+        if (profile && session.user.email && profile.email !== session.user.email) {
+          try {
+            profile = await db.updateProfile(session.user.id, { email: session.user.email });
+          } catch (e) {
+            console.warn('Could not sync the confirmed account email to its profile:', e);
+          }
+        }
         if (profile) {
           setState((prev) => ({ ...prev, currentUser: profile }));
           await refreshUserContent(session.user.id);
@@ -1005,7 +1021,7 @@ export function AppProvider({ children }) {
     const senderName = currentUser?.name || 'You';
     const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const newMessage = {
+    let newMessage = {
       id: `msg_${Date.now()}`,
       senderId,
       senderName,
@@ -1032,7 +1048,7 @@ export function AppProvider({ children }) {
     // Supabase accounts. Sample profiles stay local by design.
     if (isSupabaseConfigured && isUuid(senderId) && isUuid(recipientId)) {
       try {
-        if (!resolvedConv) {
+        if (!resolvedConv || !isUuid(resolvedConv.id)) {
           const createdConv = await db.createConversation({
             participant1Id: senderId,
             participant2Id: recipientId,
@@ -1048,16 +1064,24 @@ export function AppProvider({ children }) {
           }
         }
 
-        if (resolvedConv && isUuid(resolvedConv.id)) {
-          await db.sendChatMessage({
+        if (!resolvedConv || !isUuid(resolvedConv.id)) {
+          throw new Error('Could not create a conversation for this account. Please try again.');
+        }
+        const savedMessage = await db.sendChatMessage({
             conversation_id: resolvedConv.id,
             sender_id: senderId,
             sender_name: senderName,
             text,
           });
+        try {
+          await db.updateConversationLastMessage(resolvedConv.id, text, timeNow);
+        } catch (e) {
+          console.warn('Message was delivered, but conversation preview could not be updated:', e);
         }
+        newMessage = mapMessage(savedMessage);
       } catch (e) {
-        console.warn('Supabase message error, kept locally:', e);
+        console.error('Could not deliver chat message:', e);
+        return { success: false, error: e.message || 'Could not send your message. Please try again.' };
       }
     }
 
@@ -1185,7 +1209,7 @@ export function AppProvider({ children }) {
       }, 1500);
     }
 
-    return newMessage;
+    return { success: true, message: newMessage };
   };
 
   // ==========================================
@@ -1353,7 +1377,8 @@ export function AppProvider({ children }) {
       try {
         persisted = await db.updateProfile(currentUser.id, data);
       } catch (e) {
-        console.warn('Supabase update profile error:', e);
+        console.error('Supabase update profile error:', e);
+        throw e;
       }
     }
 

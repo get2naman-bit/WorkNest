@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ShieldCheck,
@@ -17,13 +17,34 @@ import { useApp } from '../context/AppContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Toast from '../components/ui/Toast.jsx';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js';
+import { mapProfile } from '../lib/mappers.js';
 import './DigitalIdentityPage.css';
 
 export default function DigitalIdentityPage() {
   const { id } = useParams();
   const { currentUser, users, workHistory, reviews } = useApp();
 
-  const worker = id ? users.find((u) => u.id === id) : currentUser;
+  const baseWorker = id ? users.find((u) => u.id === id) : currentUser;
+  const [liveProfile, setLiveProfile] = useState(null);
+  const worker = liveProfile?.id === baseWorker?.id
+    ? { ...baseWorker, ...liveProfile }
+    : baseWorker;
+
+  useEffect(() => {
+    setLiveProfile(null);
+    if (!isSupabaseConfigured || !baseWorker?.id || !/^[0-9a-f-]{36}$/i.test(baseWorker.id)) return undefined;
+    const profileId = baseWorker.id;
+    const channel = supabase.channel(`digital-identity:${profileId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${profileId}`,
+      }, (payload) => {
+        const profile = mapProfile(payload.new);
+        if (profile) setLiveProfile(profile);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [baseWorker?.id]);
 
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -86,6 +107,23 @@ export default function DigitalIdentityPage() {
               Browse Workers
             </Button>
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (worker.publicProfile === false && !isOwnProfile) {
+    return (
+      <div className="container" style={{ padding: '32px 24px', maxWidth: '640px' }}>
+        <div className="card" style={{ padding: '32px', textAlign: 'center' }}>
+          <ShieldCheck size={32} color="var(--muted)" style={{ marginBottom: '12px' }} />
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--navy)', marginBottom: '8px' }}>
+            This identity is private
+          </h1>
+          <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '20px' }}>
+            The worker has turned off public access to this Digital Identity.
+          </p>
+          <Link to="/workers"><Button variant="dark" size="md">Browse Workers</Button></Link>
         </div>
       </div>
     );

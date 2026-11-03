@@ -36,6 +36,8 @@ export default function MessagesPage() {
   );
 
   const [inputText, setInputText] = useState('');
+  const [sendError, setSendError] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [realtimeMessages, setRealtimeMessages] = useState({});
   const messagesEndRef = useRef(null);
@@ -79,24 +81,36 @@ export default function MessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConv?.messages, realtimeMessages]);
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (!inputText.trim() || !activeConv) return;
+    if (!inputText.trim() || !activeConv || isSending) return;
 
     const partnerId =
       activeConv.participant1Id === currentUser?.id
         ? activeConv.participant2Id
         : activeConv.participant1Id;
 
-    sendMessage({
-      conversationId: activeConv.id,
-      recipientId: partnerId,
-      jobId: activeConv.jobId,
-      jobTitle: activeConv.jobTitle,
-      text: inputText.trim(),
-    });
-
-    setInputText('');
+    const text = inputText.trim();
+    setIsSending(true);
+    setSendError('');
+    try {
+      const result = await sendMessage({
+        conversationId: activeConv.id,
+        recipientId: partnerId,
+        jobId: activeConv.jobId,
+        jobTitle: activeConv.jobTitle,
+        text,
+      });
+      if (result?.success === false) {
+        setSendError(result.error || 'Could not send your message. Please try again.');
+        return;
+      }
+      setInputText('');
+    } catch (error) {
+      setSendError(error.message || 'Could not send your message. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const filteredConversations = myConversations.filter((c) => {
@@ -314,10 +328,10 @@ export default function MessagesPage() {
                         maxWidth: '70%',
                         padding: '12px 16px',
                         borderRadius: '14px',
-                        background: isMine ? 'var(--blue)' : '#ffffff',
+                        background: isMine ? '#1a6fe0' : '#ffffff',
                         color: isMine ? '#ffffff' : 'var(--ink)',
                         boxShadow: '0 1px 3px rgba(10, 17, 32, 0.05)',
-                        border: isMine ? 'none' : '1px solid var(--line)',
+                        border: isMine ? 'none' : '1px solid #e2e8f0',
                         fontSize: '14px',
                         lineHeight: 1.5,
                       }}
@@ -359,13 +373,21 @@ export default function MessagesPage() {
                 className="form-input"
                 placeholder="Type your message here..."
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={(e) => {
+                  setInputText(e.target.value);
+                  if (sendError) setSendError('');
+                }}
                 style={{ flex: 1 }}
               />
-              <Button type="submit" variant="dark" size="md">
-                Send <Send size={14} />
+              <Button type="submit" variant="dark" size="md" disabled={isSending || !inputText.trim()}>
+                {isSending ? 'Sending…' : <>Send <Send size={14} /></>}
               </Button>
             </form>
+            {sendError && (
+              <p role="alert" style={{ padding: '0 20px 12px', color: '#b91c1c', fontSize: '13px' }}>
+                {sendError}
+              </p>
+            )}
           </div>
         ) : (
           <div

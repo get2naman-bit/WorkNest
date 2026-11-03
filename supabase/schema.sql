@@ -20,6 +20,7 @@ create table if not exists public.profiles (
   bio text,
   hourly_rate text default '₹550/hr',
   availability text default 'Available Now',
+  public_profile boolean not null default true,
   rating numeric(3, 1) default 5.0,
   reviews_count integer default 0,
   jobs_completed integer default 0,
@@ -30,6 +31,9 @@ create table if not exists public.profiles (
   profile_completion integer default 85,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+alter table public.profiles
+  add column if not exists public_profile boolean not null default true;
 
 -- ====================================================================
 -- 2. JOBS TABLE
@@ -275,7 +279,9 @@ alter table public.notifications enable row level security;
 
 -- Profiles
 drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
-create policy "Public profiles are viewable by everyone" on public.profiles for select using (true);
+create policy "Public profiles are viewable by everyone" on public.profiles for select using (
+  public_profile = true or auth.uid() = id
+);
 drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile" on public.profiles for insert with check (auth.uid() = id);
 drop policy if exists "Users can update own profile" on public.profiles;
